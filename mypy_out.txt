@@ -1,0 +1,23 @@
+src/beancount_cli/adapters.py:11: error: Argument "number" to "AmountModel" has incompatible type "Decimal | None"; expected "Decimal"  [arg-type]
+src/beancount_cli/adapters.py:20: error: Argument 3 to "Cost" has incompatible type "Any | None"; expected "date"  [arg-type]
+src/beancount_cli/adapters.py:44: error: Argument 1 to "from_core_amount" has incompatible type "Amount | None"; expected "Amount"  [arg-type]
+src/beancount_cli/adapters.py:45: error: Argument 1 to "from_core_cost" has incompatible type "Cost | CostSpec | None"; expected "Cost | None"  [arg-type]
+src/beancount_cli/adapters.py:48: error: Argument "meta" to "PostingModel" has incompatible type "dict[str, Any] | None"; expected "dict[str, Any]"  [arg-type]
+src/beancount_cli/adapters.py:59: error: Argument "tags" to "Transaction" has incompatible type "set[str]"; expected "frozenset[str]"  [arg-type]
+src/beancount_cli/adapters.py:60: error: Argument "links" to "Transaction" has incompatible type "set[str]"; expected "frozenset[str]"  [arg-type]
+src/beancount_cli/adapters.py:67: error: Argument "flag" to "TransactionModel" has incompatible type "str | None"; expected "str"  [arg-type]
+src/beancount_cli/adapters.py:69: error: Argument "narration" to "TransactionModel" has incompatible type "str | None"; expected "str"  [arg-type]
+src/beancount_cli/services.py:10: error: Skipping analyzing "beanquery": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+src/beancount_cli/services.py:134: error: Item "None" of "Amount | None" has no attribute "currency"  [union-attr]
+src/beancount_cli/services.py:141: error: Skipping analyzing "beanquery.sources": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+src/beancount_cli/services.py:141: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+src/beancount_cli/services.py:143: error: Skipping analyzing "beanquery.parser": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+src/beancount_cli/services.py:262: error: Need type annotation for "tree" (hint: "tree: dict[<type>, <type>] = ...")  [var-annotated]
+src/beancount_cli/services.py:505: error: Incompatible types in assignment (expression has type "dict[str, dict[str, Decimal]]", target has type "dict[str, Decimal]")  [assignment]
+src/beancount_cli/services.py:568: error: Incompatible default for argument "meta" (default has type "None", argument has type "dict[str, Any]")  [assignment]
+src/beancount_cli/services.py:568: note: PEP 484 prohibits implicit Optional. Accordingly, mypy has changed its default to no_implicit_optional=True
+src/beancount_cli/services.py:568: note: Use https://github.com/hauntsaninja/no_implicit_optional to automatically upgrade your codebase
+src/beancount_cli/cli.py:21: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/beancount_cli/cli.py:22: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/beancount_cli/cli.py:443: error: Incompatible default for argument "name" (default has type "EllipsisType", argument has type "str")  [assignment]
+Found 17 errors in 3 files (checked 12 source files)

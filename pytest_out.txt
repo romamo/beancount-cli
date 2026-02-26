@@ -1,0 +1,27 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.3, pytest-9.0.2, pluggy-1.6.0
+rootdir: /Users/roman/PycharmProjects/Portfoliomanager/beancount-cli
+configfile: pyproject.toml
+plugins: cov-7.0.0
+collected 29 items
+
+tests/test_advanced.py ...                                               [ 10%]
+tests/test_bql.py ...                                                    [ 20%]
+tests/test_cli.py .......                                                [ 44%]
+tests/test_coverage_gap.py .......                                       [ 68%]
+tests/test_models.py ...                                                 [ 79%]
+tests/test_services.py ......                                            [100%]
+
+================================ tests coverage ================================
+_______________ coverage: platform darwin, python 3.13.3-final-0 _______________
+
+Name                            Stmts   Miss  Cover   Missing
+-------------------------------------------------------------
+src/beancount_cli/__init__.py       1      0   100%
+src/beancount_cli/adapters.py      28      2    93%   20, 25
+src/beancount_cli/cli.py          357    202    43%   62-115, 129-151, 172-174, 179-185, 201-202, 228-240, 257-258, 272-329, 380, 387-389, 393-397, 404-407, 425-437, 456-459, 470-472, 496-498, 509-543, 554-626, 629
+src/beancount_cli/models.py        33      0   100%
+src/beancount_cli/services.py     345    111    68%   34-36, 47, 130, 132, 134, 214-217, 226-235, 266-267, 287-289, 299, 330, 343-403, 411-412, 450-507, 515-526, 595-597
+-------------------------------------------------------------
+TOTAL                             764    315    59%
+============================== 29 passed in 0.34s ==============================

@@ -1,0 +1,25 @@
+# Environments
+.venv/
+.env
+
+# Cache and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+tmp/
+dist/
+build/
+*.egg-info/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+.DS_Store
