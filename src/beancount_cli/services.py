@@ -93,8 +93,8 @@ class ValidationService:
                 errors.append(f"Account '{p.account}' does not exist (no Open directive).")
 
             if p.units.currency not in valid_commodities:
-                # Beancount doesn't strictly require Commodity directives for all currencies (e.g. USD),
-                # but if strict mode is on... let's just warn or skip common ones?
+                # Beancount doesn't strictly require Commodity directives for all currencies
+                # (e.g. USD), but if strict mode is on... let's just warn or skip common ones?
                 # Actually beancount allow_undefined_currencies option controls this.
                 # For now, let's trust the ledger options or just skip this check if empty.
                 if valid_commodities:
@@ -109,7 +109,8 @@ class TransactionService:
         self.ledger_service = LedgerService(ledger_file)
         self.validator = ValidationService(self.ledger_service)
 
-    # ... list_transactions ... (omitted from replace chunk to keep it small? No, I need to keep the file valid)
+    # ... list_transactions ... (omitted from replace chunk to keep it small?
+    # No, I need to keep the file valid)
     # Wait, replace_file_content needs Context.
     # I'll replace the TransactionService class start and add_transaction method.
 
@@ -228,7 +229,8 @@ class TransactionService:
             except KeyError as e:
                 # Fallback if unknown placeholder
                 print(
-                    f"Warning: Unknown placeholder {e} in new_transaction_file config. Using raw string.",
+                    f"Warning: Unknown placeholder {e} in new_transaction_file config. "
+                    "Using raw string.",
                     file=sys.stderr,
                 )
                 formatted_path = inbox_file_str
@@ -339,7 +341,8 @@ class ReportService:
         valuation: str = "market",
     ) -> dict[str, dict[str, dict[str, Decimal]]]:
         """
-        Return {account: {"units": {curr: amt}, "cost": {curr: amt}}}, optionally filtered, converted, and valued.
+        Return {account: {"units": {curr: amt}, "cost": {curr: amt}}},
+        optionally filtered, converted, and valued.
         """
         self.ledger.load()
         from beancount.core import prices as prices_lib
@@ -367,11 +370,13 @@ class ReportService:
                     for pos in cb:
                         if pos.units.currency == convert_to:
                             total_converted += pos.units.number
-                        # Get operating currencies for transitive conversion (e.g. PPFD -> EUR -> USD)
+                        # Get operating currencies for transitive conversion
+                        # (e.g. PPFD -> EUR -> USD)
                         via_currencies = self.ledger.get_operating_currencies()
 
                         if valuation == "market":
-                            # Use beancount.core.convert for robust conversion (handles indirect paths)
+                            # Use beancount.core.convert for robust conversion
+                            # (handles indirect paths)
                             from beancount.core import convert
 
                             try:
@@ -431,7 +436,8 @@ class ReportService:
                                         f"Failed to convert cost {cost_amt} to {convert_to}"
                                     ) from e
                             else:
-                                # No cost (cash). Try converting units to target currency for cost basis
+                                # No cost (cash). Try converting units to target currency
+                                # for cost basis
                                 try:
                                     converted_units = convert.convert_amount(
                                         pos.units, convert_to, prices, via=via_currencies

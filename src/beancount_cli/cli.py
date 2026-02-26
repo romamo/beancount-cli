@@ -75,7 +75,8 @@ def print_balances_table(balances, title) -> None:
         for c in all_currencies
     ):
         console.print(
-            "[dim]Note: Perpetual positions in specific currencies are normal where exchanges occur at market prices (@@).[/dim]"
+            "[dim]Note: Perpetual positions in specific currencies are normal where "
+            "exchanges occur at market prices (@@).[/dim]"
         )
 
 
@@ -126,7 +127,8 @@ def print_holdings_table(holdings_data, valuation_method, target_currencies) -> 
                 [
                     f"[bold]{m_total:,.2f}[/bold]",
                     f"[bold]{c_total:,.2f}[/bold]",
-                    f"[bold][{gain_color}]{gain_total:,.2f} ({gain_pct_total:.1f}%)[/{gain_color}][/bold]",
+                    f"[bold][{gain_color}]{gain_total:,.2f} "
+                    f"({gain_pct_total:.1f}%)[/{gain_color}][/bold]",
                 ]
             )
         table.add_row(*footer_row)
@@ -170,7 +172,8 @@ def get_ledger_file(ctx: typer.Context, override: Path | None = None) -> Path:
         return p
 
     console.print(
-        "[red]Error: No ledger file found. Specify file as argument, use --file, or set BEANCOUNT_FILE/BEANCOUNT_PATH.[/red]"
+        "[red]Error: No ledger file found. Specify file as argument, use --file, "
+        "or set BEANCOUNT_FILE/BEANCOUNT_PATH.[/red]"
     )
     raise typer.Exit(code=1)
 
@@ -342,7 +345,8 @@ def report_cmd(
     if report_type == "audit":
         if not audit_currency:
             console.print(
-                "[red]Error: 'audit' report requires a currency (e.g., bean-cli report audit EUR).[/red]"
+                "[red]Error: 'audit' report requires a currency "
+                "(e.g., bean-cli report audit EUR).[/red]"
             )
             raise typer.Exit(1)
 
@@ -575,7 +579,8 @@ def format_cmd(
 
     # Check if bean-format is available
     try:
-        # We use subprocess because bean-format is a script, not easily importable as a library function without internal knowledge
+        # We use subprocess because bean-format is a script, not easily
+        # importable as a library function without internal knowledge
         cmd = ["bean-format", "-c", "50", str(ledger_file)]
 
         # Capture output or let it print? bean-format prints to stdout by default.
@@ -584,8 +589,7 @@ def format_cmd(
         # Let's check help again... it has -o.
 
         # To emulate in-place safely:
-        # 1. format to temp
-        # 2. move temp to original
+        # 1. format to temp, 2. move temp to original
 
         import shutil
         import tempfile
@@ -634,8 +638,8 @@ def price_cmd(
         # 1. Run bean-price
         # 2. Append output to 'prices.beancount' (if exists) or 'main.beancount'
 
-        # Check for price file config?
-        # Let's assume user handles the "where" by configuring 'price' command behavior via simple append for now.
+        # Let's assume user handles the "where" by configuring 'price' command behavior
+        # via simple append for now.
 
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         prices_output = result.stdout.strip()
@@ -677,7 +681,8 @@ def price_cmd(
                 f.write("\n")
 
             console.print(
-                f"[green]Appended {len(prices_output.splitlines())} prices to {target_price_file.name}[/green]"
+                f"[green]Appended {len(prices_output.splitlines())} prices to "
+                f"{target_price_file.name}[/green]"
             )
         else:
             console.print(prices_output)
