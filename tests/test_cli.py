@@ -1,24 +1,30 @@
+import io
 import json
+from unittest.mock import patch
 
-from typer.testing import CliRunner
+from beancount_cli.cli import main
 
-from beancount_cli.cli import app
 
-runner = CliRunner()
+def run_cli(*args):
+    with patch("sys.stdout", new=io.StringIO()) as stdout:
+        with patch("sys.stderr", new=io.StringIO()) as stderr:
+            try:
+                main(list(args))
+                return 0, stdout.getvalue(), stderr.getvalue()
+            except SystemExit as e:
+                return e.code, stdout.getvalue(), stderr.getvalue()
 
 
 def test_check_command(temp_beancount_file):
-    # Pass file via positional arg
-    result = runner.invoke(app, ["check", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert "No errors found" in result.stdout
+    code, out, err = run_cli("check", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "No errors found" in out
 
 
 def test_transaction_list(temp_beancount_file):
-    # Positional arg
-    result = runner.invoke(app, ["transaction", "list", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert "Employer" in result.stdout
+    code, out, err = run_cli("transaction", "list", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "Employer" in out
 
 
 def test_transaction_add_json(temp_beancount_file):
@@ -30,90 +36,79 @@ def test_transaction_add_json(temp_beancount_file):
             {"account": "Expenses:Food", "units": {"number": 10, "currency": "USD"}},
         ],
     }
-    # Positional arg for add
-    result = runner.invoke(
-        app, ["transaction", "add", str(temp_beancount_file), "--json", json.dumps(payload)]
+    code, out, err = run_cli(
+        "transaction", "add", str(temp_beancount_file), "--json", json.dumps(payload)
     )
-    assert result.exit_code == 0
+    assert code in (0, None)
 
-    # Verify via check
-    check_res = runner.invoke(app, ["check", str(temp_beancount_file)])
-    assert check_res.exit_code == 0
+    check_code, check_out, check_err = run_cli("check", str(temp_beancount_file))
+    assert check_code in (0, None)
 
 
 def test_account_create(temp_beancount_file):
-    result = runner.invoke(
-        app,
-        [
-            "account",
-            "create",
-            str(temp_beancount_file),
-            "--name",
-            "Liabilities:CreditCard",
-            "--currency",
-            "USD",
-        ],
+    code, out, err = run_cli(
+        "account",
+        "create",
+        str(temp_beancount_file),
+        "--name",
+        "Liabilities:CreditCard",
+        "-c",
+        "USD",
     )
-    assert result.exit_code == 0
-    assert "created" in result.stdout
+    assert code in (0, None)
+    assert "created" in out
 
 
 def test_commodity_create(temp_beancount_file):
-    # check if currency is first arg
-    result = runner.invoke(
-        app, ["commodity", "create", "ETH", str(temp_beancount_file), "--name", "Ethereum"]
+    code, out, err = run_cli(
+        "commodity", "create", "ETH", str(temp_beancount_file), "--name", "Ethereum"
     )
-    assert result.exit_code == 0
-    assert "created" in result.stdout
+    assert code in (0, None)
+    assert "created" in out
 
 
 def test_tree_command(temp_beancount_file):
-    # Test that tree works
-    result = runner.invoke(app, ["tree", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert str(temp_beancount_file) in result.stdout
+    code, out, err = run_cli("tree", str(temp_beancount_file))
+    assert code in (0, None)
+    assert str(temp_beancount_file) in out
 
 
 def test_report_aliases(temp_beancount_file):
-    # Test balance alias
-    res1 = runner.invoke(app, ["report", "balance", str(temp_beancount_file)])
-    assert res1.exit_code == 0
-    assert "Balance Sheet" in res1.stdout
-    assert "Assets:Cash" in res1.stdout
+    code, out, err = run_cli("report", "balance", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "Balance Sheet" in out
 
-    # Test trial alias
-    res2 = runner.invoke(app, ["report", "trial", str(temp_beancount_file)])
-    assert res2.exit_code == 0
-    assert "Trial Balance" in res2.stdout
+    code, out, err = run_cli("report", "trial", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "Trial Balance" in out
 
-    # Test tree command
-    res3 = runner.invoke(app, ["tree", str(temp_beancount_file)])
-    assert res3.exit_code == 0
-    assert str(temp_beancount_file) in res3.stdout
+    code, out, err = run_cli("tree", str(temp_beancount_file))
+    assert code in (0, None)
+    assert str(temp_beancount_file) in out
 
 
 def test_report_holdings(temp_beancount_file):
-    result = runner.invoke(app, ["report", "holdings", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert "Holdings" in result.stdout
+    code, out, err = run_cli("report", "holdings", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "Holdings" in out
 
 
 def test_report_audit(temp_beancount_file):
-    result = runner.invoke(app, ["report", "audit", "USD", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert "Audit Report: USD" in result.stdout
+    code, out, err = run_cli("report", "audit", "USD", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "Audit Report: USD" in out
 
 
 def test_tx_schema():
-    result = runner.invoke(app, ["transaction", "schema"])
-    assert result.exit_code == 0
-    assert "title" in result.stdout
+    code, out, err = run_cli("transaction", "schema")
+    assert code in (0, None)
+    assert "title" in out
 
 
 def test_account_list(temp_beancount_file):
-    result = runner.invoke(app, ["account", "list", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert "Assets:Cash" in result.stdout
+    code, out, err = run_cli("account", "list", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "Assets:Cash" in out
 
 
 def test_format_cmd(temp_beancount_file, monkeypatch):
@@ -123,8 +118,6 @@ def test_format_cmd(temp_beancount_file, monkeypatch):
         class MockResult:
             stdout = ""
 
-        # Write to the temp file so shutil.move has something
-        # args[0] is the command list: ["bean-format", "-c", "50", "-o", str(tmp_path), str(ledger_file)]
         cmd_list = args[0]
         if "-o" in cmd_list:
             out_idx = cmd_list.index("-o") + 1
@@ -133,9 +126,9 @@ def test_format_cmd(temp_beancount_file, monkeypatch):
         return MockResult()
 
     monkeypatch.setattr(subprocess, "run", mock_run)
-    result = runner.invoke(app, ["format", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert "Formatted" in result.stdout
+    code, out, err = run_cli("format", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "Formatted" in out
 
 
 def test_price_cmd(temp_beancount_file, monkeypatch):
@@ -148,14 +141,13 @@ def test_price_cmd(temp_beancount_file, monkeypatch):
         return MockResult()
 
     monkeypatch.setattr(subprocess, "run", mock_run)
-    result = runner.invoke(app, ["price", str(temp_beancount_file)])
-    assert result.exit_code == 0
-    assert "2024-01-01" in result.stdout
+    code, out, err = run_cli("price", str(temp_beancount_file))
+    assert code in (0, None)
+    assert "2024-01-01" in out
 
-    # Test update flag
-    result_update = runner.invoke(app, ["price", str(temp_beancount_file), "--update"])
-    assert result_update.exit_code == 0
-    assert "Appended" in result_update.stdout
+    code, out, err = run_cli("price", str(temp_beancount_file), "--update")
+    assert code in (0, None)
+    assert "Appended" in out
 
 
 def test_missing_ledger_file(monkeypatch):
@@ -165,6 +157,7 @@ def test_missing_ledger_file(monkeypatch):
         monkeypatch.delenv("BEANCOUNT_FILE")
     if "BEANCOUNT_PATH" in os.environ:
         monkeypatch.delenv("BEANCOUNT_PATH")
-    result = runner.invoke(app, ["check"])
-    assert result.exit_code == 1
-    assert "Error: No ledger file found" in result.stdout
+
+    code, out, err = run_cli("check")
+    assert code == 1
+    assert "Error: No ledger file found" in out

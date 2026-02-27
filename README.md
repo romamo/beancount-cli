@@ -14,8 +14,11 @@ A robust command-line interface and Python library for programmatically managing
     -   Manage Accounts (list, create).
     -   Manage Commodities (create).
     -   Manage Prices (fetch, update).
--   **Formatting**: Auto-format ledgers (`bean-format` wrapper).
--   **Reporting**: Generate simple balance and holding reports.
+-   **Formatting**:
+    -   Auto-format ledgers (`bean-format` wrapper).
+    -   Global output formatting: `--format` support (`table`, `json`, `csv`) for all data commands.
+-   **Reporting**: Generate balance, holding, and audit reports with multi-currency conversion.
+-   **Composability**: Built for Unix piping (`json` | `csv`) and batch processing via STDIN.
 -   **Configuration**: Custom Beancount directives for routing new entries to specific files.
 
 ## Installation
@@ -36,7 +39,20 @@ uv sync
 
 ## Usage
 
-The main command is `bean-cli`.
+### Global Formatting Flag
+
+All data-retrieval and reporting commands support the `--format` flag.
+
+```bash
+# Default human-readable table
+bean-cli report bs
+
+# Machine-readable CSV (highly token-efficient for AI agents)
+bean-cli --format csv transaction list
+
+# Structural JSON (perfect for piping into jq or other scripts)
+bean-cli --format json account list
+```
 
 ### Check Ledger
 
@@ -119,26 +135,38 @@ bean-cli transaction add main.beancount --json ... --draft
 
 ### Manage Accounts & Commodities
 
+All creation commands (`transaction add`, `account create`, `commodity create`) support batch processing via JSON arrays on STDIN.
+
 ```bash
-# List Accounts
-bean-cli account list main.beancount
+# Batch add transactions from a file
+cat txs.json | bean-cli transaction add --json -
 
-# Create Account
-bean-cli account create main.beancount --name "Assets:NewBank" --currency "USD"
-
-# Create Commodity
-bean-cli commodity create "BTC" main.beancount --name "Bitcoin"
-
-# Fetch Prices
-bean-cli price main.beancount
-
-# Update Prices (Append)
-bean-cli price main.beancount --update
+# Pipe accounts from one ledger to another
+bean-cli --format json account list --file old.beancount | bean-cli account create --json -
 ```
 
-## AI Agent Integration
+**Standard CLI usage:**
+```bash
+# List Accounts
+bean-cli account list
 
-`beancount-cli` is specifically optimized for AI agents.
+# Create Account
+bean-cli account create --name "Assets:NewBank" --currency "USD"
+
+# Create Commodity
+bean-cli commodity create "BTC" --name "Bitcoin"
+
+# Fetch and Update Prices
+bean-cli price --update
+```
+
+`beancount-cli` is specifically optimized for AI agents, providing both operational guidance and machine-readable interfaces.
+
+### Agent Documentation
+We provide specialized documentation for different types of AI interactions:
+- [**AGENTS.md**](./AGENTS.md): Guide for **AI End Agents** operating the CLI (prompting strategies, token optimization, batch workflows).
+- [**CODING_AGENTS.md**](./CODING_AGENTS.md): Mandatory rules for **AI Coding Agents** modifying the source code (Value Objects, Fail-Fast rules, type safety).
+
 
 ### Transaction Schema
 Agents can dynamically retrieve the JSON schema for transactions to ensure valid data generation:

@@ -11,10 +11,9 @@ dependencies = [
     "beancount>=3.0.0",
     "beanquery>=0.1.0",
     "pydantic>=2.0.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
     "python-dateutil>=2.8.2",
     "beanprice>=2.1.0",
+    "pydantic-settings>=2.0.0",
 ]
 keywords = ["beancount", "cli", "accounting", "automation", "agent"]
 classifiers = [
@@ -36,7 +35,7 @@ Repository = "https://github.com/romamo/beancount-cli"
 Issues = "https://github.com/romamo/beancount-cli/issues"
 
 [project.scripts]
-bean-cli = "beancount_cli.cli:app"
+bean-cli = "beancount_cli.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/beancount_cli"]
