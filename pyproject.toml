@@ -1,13 +1,13 @@
 [project]
 name = "beancount-cli"
-version = "0.2.0"
+version = "0.2.1"
 description = "A CLI tool to manage Beancount ledgers"
 readme = "README.md"
 authors = [
     { name = "Roman Medvedev", email = "pypi@romavm.dev" }
 ]
 license = { text = "MIT" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "beancount>=3.0.0",
     "beanquery>=0.1.0",

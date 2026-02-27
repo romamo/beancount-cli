@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from beancount_cli import __version__
 from beancount_cli.config import CliConfig
 from beancount_cli.formatting import Console, Table, Tree, render_output
 from beancount_cli.models import AccountModel, TransactionModel
@@ -597,6 +598,9 @@ Global Flags:
     )
     parser.add_argument(
         "--file", "-f", dest="ledger_file", type=Path, help="Path to main.beancount file"
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"beancount-cli {__version__}", help="Show version"
     )
     parser.add_argument(
         "--format", choices=["table", "json", "csv"], default="table", help="Global output format"
