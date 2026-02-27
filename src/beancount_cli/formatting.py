@@ -144,22 +144,24 @@ class Tree:
     def __str__(self):
         return "\n".join(self._render())
 
+
 def truncate_cell(value: str, max_width: int = 40) -> str:
     if len(value) <= max_width:
         return value
-    return value[:max_width - 1] + "…"
+    return value[: max_width - 1] + "…"
+
 
 def render_output(
-    data: list[dict[str, Any]] | dict[str, Any], 
-    format_type: str = "table", 
-    title: str = "", 
-    console: Console | None = None
+    data: list[dict[str, Any]] | dict[str, Any],
+    format_type: str = "table",
+    title: str = "",
+    console: Console | None = None,
 ) -> None:
     """
     Renders pure data structures into the specified format (table, json, csv).
     """
     out_console = console or Console()
-    
+
     # Handle single item format (turn into list for table/csv processing, or format as key-value)
     data_list: list[dict[str, Any]]
     if isinstance(data, dict):
@@ -168,7 +170,7 @@ def render_output(
     else:
         is_single_item = False
         data_list = data
-    
+
     if format_type == "json":
         out_console.print(json.dumps(data, indent=2, default=str))
         return
@@ -176,15 +178,15 @@ def render_output(
     if format_type == "csv":
         if not data_list:
             return
-            
+
         output = io.StringIO()
         fieldnames = list(data_list[0].keys())
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
-        
+
         for row in data_list:
             writer.writerow({k: str(v) if v is not None else "" for k, v in row.items()})
-            
+
         out_console.print(output.getvalue().strip())
         return
 
@@ -203,7 +205,7 @@ def render_output(
     if not data_list:
         out_console.print(table)
         return
-        
+
     headers = list(data_list[0].keys())
     for key in headers:
         # Give some styling to particular columns
@@ -213,12 +215,12 @@ def render_output(
         elif key == "Date":
             style = "green"
         table.add_column(key, style=style)
-        
+
     for row in data_list:
         table_row = []
         for k, v in row.items():
             val = str(v) if v is not None else ""
-            
+
             # Smart truncation for list tables
             # Don't truncate accounts or IDs
             if "Account" not in k and "ID" not in k and "id" not in k and "Date" not in k:
@@ -227,5 +229,5 @@ def render_output(
                     val = truncate_cell(val, 40)
             table_row.append(val)
         table.add_row(*table_row)
-        
+
     out_console.print(table)

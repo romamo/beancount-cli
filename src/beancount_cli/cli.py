@@ -262,7 +262,7 @@ def report_cmd(args: argparse.Namespace):
 
         targets = [target_currency] if target_currency else []
         holdings = report_service.get_holdings(valuation=valuation, target_currencies=targets)
-        
+
         if format_type == "table":
             print_holdings_table(holdings, valuation, targets)
         else:
@@ -336,17 +336,19 @@ def report_cmd(args: argparse.Namespace):
             for tx in txs:
                 for p in tx.postings:
                     if p.units.currency == audit_currency:
-                        data.append({
-                            "Date": str(tx.date),
-                            "Description": (
-                                f"{tx.payee}: {tx.narration}" if tx.payee else tx.narration
-                            ),
-                            "Account": p.account,
-                            "Amount": str(p.units.number),
-                            "Currency": p.units.currency,
-                            "Price": str(p.price.number) if p.price else "",
-                            "Cost": str(p.cost.number) if p.cost else ""
-                        })
+                        data.append(
+                            {
+                                "Date": str(tx.date),
+                                "Description": (
+                                    f"{tx.payee}: {tx.narration}" if tx.payee else tx.narration
+                                ),
+                                "Account": p.account,
+                                "Amount": str(p.units.number),
+                                "Currency": p.units.currency,
+                                "Price": str(p.price.number) if p.price else "",
+                                "Cost": str(p.cost.number) if p.cost else "",
+                            }
+                        )
             render_output(
                 data, format_type=format_type, title=f"Audit {audit_currency}", console=console
             )
@@ -370,17 +372,10 @@ def tx_list_cmd(args: argparse.Namespace):
     else:
         data = []
         for tx in txs:
-            data.append({
-                "Date": str(tx.date),
-                "Payee": tx.payee or "",
-                "Narration": tx.narration
-            })
+            data.append({"Date": str(tx.date), "Payee": tx.payee or "", "Narration": tx.narration})
 
     render_output(
-        data, 
-        format_type=format_type, 
-        title=f"Transactions ({len(txs)})", 
-        console=console
+        data, format_type=format_type, title=f"Transactions ({len(txs)})", console=console
     )
 
 
@@ -395,9 +390,10 @@ def tx_add_cmd(args: argparse.Namespace):
             content = args.json
 
         data = json.loads(content)
-        
+
         if isinstance(data, list):
             from pydantic import TypeAdapter
+
             ta = TypeAdapter(list[TransactionModel])
             models = ta.validate_python(data)
             for m in models:
@@ -427,17 +423,16 @@ def account_list_cmd(args: argparse.Namespace):
     else:
         data = []
         for acc in accounts:
-            data.append({
-                "Account": acc.name,
-                "Open Date": str(acc.open_date),
-                "Currencies": ", ".join(acc.currencies)
-            })
+            data.append(
+                {
+                    "Account": acc.name,
+                    "Open Date": str(acc.open_date),
+                    "Currencies": ", ".join(acc.currencies),
+                }
+            )
 
     render_output(
-        data, 
-        format_type=format_type, 
-        title=f"Accounts ({len(accounts)})", 
-        console=console
+        data, format_type=format_type, title=f"Accounts ({len(accounts)})", console=console
     )
 
 
@@ -450,10 +445,11 @@ def account_create_cmd(args: argparse.Namespace):
             content = sys.stdin.read()
         else:
             content = args.json
-            
+
         data_input = json.loads(content)
         if isinstance(data_input, list):
             from pydantic import TypeAdapter
+
             ta = TypeAdapter(list[AccountModel])
             models = ta.validate_python(data_input)
             for m in models:
@@ -479,16 +475,16 @@ def account_create_cmd(args: argparse.Namespace):
 def commodity_create_cmd(args: argparse.Namespace):
     ledger_file = get_ledger_file(args.pos_ledger_file or args.ledger_file)
     service = CommodityService(ledger_file)
-    
+
     if args.json:
         if args.json == "-":
             content = sys.stdin.read()
         else:
             content = args.json
-            
+
         data_input = json.loads(content)
-        # Simplified batch for commodity as it doesn't have a full model yet, 
-        # just currency/name args. 
+        # Simplified batch for commodity as it doesn't have a full model yet,
+        # just currency/name args.
         # We'll treat list of dicts with 'currency' and 'name'.
         items = data_input if isinstance(data_input, list) else [data_input]
         for item in items:
@@ -597,7 +593,7 @@ Global Flags:
   --format json     Best for single-item structural responses or piping into `jq`.
   --format csv      Highly recommended for AI Agents querying lists (3-5x token savings).
   --format table    Default terminal formatting for human-readable outputs.
-        """
+        """,
     )
     parser.add_argument(
         "--file", "-f", dest="ledger_file", type=Path, help="Path to main.beancount file"
@@ -620,7 +616,7 @@ Global Flags:
 
     # Report
     report_p = subparsers.add_parser(
-        "report", 
+        "report",
         help="Generate simple reports.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -629,7 +625,7 @@ Examples:
   bean report holdings --valuation market
   bean report trial-balance
   bean report audit EUR
-        """
+        """,
     )
     report_p.add_argument(
         "report_type", help="Type of report: balance-sheet, trial-balance, audit, holdings"
@@ -661,7 +657,7 @@ Examples:
     tx_list.set_defaults(func=tx_list_cmd)
 
     tx_add = tx_subs.add_parser(
-        "add", 
+        "add",
         help="Add a new transaction.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -671,7 +667,7 @@ Examples for AI Agents:
   
   # Batch STDIN insertion
   bean transaction list --format json | bean transaction add --json -
-        """
+        """,
     )
     tx_add.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     tx_add.add_argument("--json", "-j", help="JSON string data (or '-' to read from STDIN)")
@@ -693,7 +689,7 @@ Examples for AI Agents:
     acc_list.set_defaults(func=account_list_cmd)
 
     acc_create = acc_subs.add_parser(
-        "create", 
+        "create",
         help="Create a new account.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -703,7 +699,7 @@ Examples for AI Agents:
   
   # Batch STDIN insertion
   bean account list --format json | bean account create --json -
-        """
+        """,
     )
     acc_create.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     acc_create.add_argument("--name", "-n", help="Account name (e.g. Assets:Bank)")
@@ -719,14 +715,14 @@ Examples for AI Agents:
     comm_subs = comm_p.add_subparsers(dest="comm_cmd", required=True)
 
     comm_create = comm_subs.add_parser(
-        "create", 
+        "create",
         help="Create a new commodity.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples for AI Agents:
   bean commodity create USD --name "US Dollar"
   bean commodity create --json '[{"currency": "BTC", "name": "Bitcoin"}]'
-        """
+        """,
     )
     comm_create.add_argument("currency", nargs="?", help="Currency code (e.g. USD)")
     comm_create.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
