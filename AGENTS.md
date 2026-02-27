@@ -12,7 +12,7 @@ If you are executing shell commands to help a human analyze or modify their `mai
 
 ### Core Configuration & Bootstrapping
 - **Ledger Path**: The CLI requires a target `.beancount` file. You can either pass it directly via `--file /path/to/main.beancount` or set the environment variable: `export BEANCOUNT_FILE=/path/to/main.beancount`.
-- **Self Discovery**: If you are unsure about the available arguments for a command, ALWAYS run `uv run bean-cli <command> --help` to read the descriptive schemas and examples embedded directly in the source code.
+- **Self Discovery**: If you are unsure about the available arguments for a command, ALWAYS run `uv run bean <command> --help` to read the descriptive schemas and examples embedded directly in the source code.
 
 ### Available Capabilities (High-Level)
 - **`account list/create`**: Create and list chart of accounts.
@@ -28,10 +28,10 @@ If you are executing shell commands to help a human analyze or modify their `mai
 - **Data Insertion**: Write commands (like `transaction add`, `account create`, `commodity create`) accept rigorous JSON payloads dynamically through STDIN (`--json -`).
 - **Schema Discovery**: If you need to know the required JSON structure to insert a transaction via STDIN, DO NOT GUESS. Run:
    ```bash
-   uv run bean-cli transaction schema
+   uv run bean transaction schema
    ``` 
    This will output the exact Pydantic boundary schema expected by the application.
-- **Native BQL**: `transaction list` supports Beancount Query Language (BQL) directly via the `--where` flag (e.g., `uv run bean-cli transaction list --where "account ~ 'Expenses'"`).
+- **Native BQL**: `transaction list` supports Beancount Query Language (BQL) directly via the `--where` flag (e.g., `uv run bean transaction list --where "account ~ 'Expenses'"`).
 - **Unix Composability**: Use the global `--format` flag *before* the command to pipe outputs.
-   - *Example Pipeline:* `uv run bean-cli --format json account list | uv run bean-cli account create --json -`
+   - *Example Pipeline:* `uv run bean --format json account list | uv run bean account create --json -`
 - **Batch Processing**: Never loop shell executions to insert items one-by-one! Construct a massive JSON array and pipe the entire array to `transaction add --json -` for instantaneous batch processing.

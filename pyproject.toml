@@ -6,6 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Roman Medvedev", email = "pypi@romavm.dev" }
 ]
+license = { text = "MIT" }
 requires-python = ">=3.9"
 dependencies = [
     "beancount>=3.0.0",
@@ -35,7 +36,23 @@ Repository = "https://github.com/romamo/beancount-cli"
 Issues = "https://github.com/romamo/beancount-cli/issues"
 
 [project.scripts]
-bean-cli = "beancount_cli.cli:main"
+bean = "beancount_cli.cli:main"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/beancount_cli",
+    "tests",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE",
+]
+exclude = [
+    ".agent",
+    ".github",
+    "uv.lock",
+    "tmp",
+    "dist",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/beancount_cli"]

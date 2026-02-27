@@ -290,7 +290,7 @@ def report_cmd(args: argparse.Namespace):
         if not audit_currency:
             console.print(
                 "[red]Error: 'audit' report requires a currency "
-                "(e.g., bean-cli report audit EUR).[/red]"
+                "(e.g., bean report audit EUR).[/red]"
             )
             sys.exit(1)
 
@@ -625,10 +625,10 @@ Global Flags:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  beancount-cli report balance-sheet --convert USD
-  beancount-cli report holdings --valuation market
-  beancount-cli report trial-balance
-  beancount-cli report audit EUR
+  bean report balance-sheet --convert USD
+  bean report holdings --valuation market
+  bean report trial-balance
+  bean report audit EUR
         """
     )
     report_p.add_argument(
@@ -667,10 +667,10 @@ Examples:
         epilog="""
 Examples for AI Agents:
   # Single inline payload
-  beancount-cli transaction add --json '{"date": "2025-01-01", "narration": "Test", "postings": []}'
+  bean transaction add --json '{"date": "2025-01-01", "narration": "Test", "postings": []}'
   
   # Batch STDIN insertion
-  beancount-cli transaction list --format json | beancount-cli transaction add --json -
+  bean transaction list --format json | bean transaction add --json -
         """
     )
     tx_add.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
@@ -699,10 +699,10 @@ Examples for AI Agents:
         epilog="""
 Examples for AI Agents:
   # Single inline payload
-  beancount-cli account create --json '{"name": "Assets:Cash", "currencies": ["USD"]}'
+  bean account create --json '{"name": "Assets:Cash", "currencies": ["USD"]}'
   
   # Batch STDIN insertion
-  beancount-cli account list --format json | beancount-cli account create --json -
+  bean account list --format json | bean account create --json -
         """
     )
     acc_create.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
@@ -724,8 +724,8 @@ Examples for AI Agents:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples for AI Agents:
-  beancount-cli commodity create USD --name "US Dollar"
-  beancount-cli commodity create --json '[{"currency": "BTC", "name": "Bitcoin"}]'
+  bean commodity create USD --name "US Dollar"
+  bean commodity create --json '[{"currency": "BTC", "name": "Bitcoin"}]'
         """
     )
     comm_create.add_argument("currency", nargs="?", help="Currency code (e.g. USD)")

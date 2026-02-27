@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-27
+
+### Changed
+- Renamed the CLI entry point from `beancount-cli` to `bean` for better ergonomics and branding.
+- Enhanced CLI help descriptions and examples for better AI agent discoverability.
+- Separated documentation for user-facing agents (`AGENTS.md`) and coding/development agents (`CODING_AGENTS.md`).
+- Added strict type validation and Pydantic schema discovery.
+
 ## [0.1.0] - Initial Release
+
 
 ### Added
 - Core Beancount CLI functionality.

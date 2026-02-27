@@ -45,13 +45,13 @@ All data-retrieval and reporting commands support the `--format` flag.
 
 ```bash
 # Default human-readable table
-bean-cli report bs
+bean report bs
 
 # Machine-readable CSV (highly token-efficient for AI agents)
-bean-cli --format csv transaction list
+bean --format csv transaction list
 
 # Structural JSON (perfect for piping into jq or other scripts)
-bean-cli --format json account list
+bean --format json account list
 ```
 
 ### Check Ledger
@@ -59,7 +59,7 @@ bean-cli --format json account list
 Validate your ledger file:
 
 ```bash
-bean-cli check main.beancount
+bean check main.beancount
 ```
 
 ### Format Ledger
@@ -67,7 +67,7 @@ bean-cli check main.beancount
 Format your ledger file in-place (uses `bean-format`):
 
 ```bash
-bean-cli format main.beancount
+bean format main.beancount
 ```
 
 ### View Inclusion Tree
@@ -75,7 +75,7 @@ bean-cli format main.beancount
 Visualize the tree of included files:
 
 ```bash
-bean-cli tree main.beancount
+bean tree main.beancount
 ```
 
 ### Reports
@@ -84,16 +84,16 @@ Generate specialized accounting reports with multi-currency support:
 
 ```bash
 # Balance Sheet (Assets, Liabilities, Equity)
-bean-cli report balance-sheet main.beancount
+bean report balance-sheet main.beancount
 
 # Trial Balance (All accounts including Income/Expenses)
-bean-cli report trial-balance main.beancount
+bean report trial-balance main.beancount
 
 # Holdings (Net worth per Asset account)
-bean-cli report holdings main.beancount
+bean report holdings main.beancount
 
 # Audit a specific currency (Source of Exposure)
-bean-cli report audit USD main.beancount
+bean report audit USD main.beancount
 ```
 
 > [!TIP]
@@ -105,10 +105,10 @@ Use the `--convert` and `--valuation` flags for a consolidated view:
 
 ```bash
 # View Trial Balance in USD using historical cost
-bean-cli report trial main.beancount --convert USD --valuation cost
+bean report trial main.beancount --convert USD --valuation cost
 
 # View Balance Sheet in EUR using current market prices
-bean-cli report bs main.beancount --convert EUR --valuation market
+bean report bs main.beancount --convert EUR --valuation market
 ```
 
 | Valuation | Description | Use Case |
@@ -118,19 +118,19 @@ bean-cli report bs main.beancount --convert EUR --valuation market
 
 **List Transactions:**
 ```bash
-bean-cli transaction list main.beancount --account "Assets:US:.*" --payee "Amazon"
+bean transaction list main.beancount --account "Assets:US:.*" --payee "Amazon"
 ```
 
 **Add Transaction:**
 ```bash
 # JSON via argument
-bean-cli transaction add main.beancount --json '{"date": "2023-10-27", ...}'
+bean transaction add main.beancount --json '{"date": "2023-10-27", ...}'
 
 # JSON via stdin (Recommended for complex data)
-cat tx.json | bean-cli transaction add main.beancount --json -
+cat tx.json | bean transaction add main.beancount --json -
 
 # Create as Draft (!)
-bean-cli transaction add main.beancount --json ... --draft
+bean transaction add main.beancount --json ... --draft
 ```
 
 ### Manage Accounts & Commodities
@@ -139,25 +139,25 @@ All creation commands (`transaction add`, `account create`, `commodity create`) 
 
 ```bash
 # Batch add transactions from a file
-cat txs.json | bean-cli transaction add --json -
+cat txs.json | bean transaction add --json -
 
 # Pipe accounts from one ledger to another
-bean-cli --format json account list --file old.beancount | bean-cli account create --json -
+bean --format json account list --file old.beancount | bean account create --json -
 ```
 
 **Standard CLI usage:**
 ```bash
 # List Accounts
-bean-cli account list
+bean account list
 
 # Create Account
-bean-cli account create --name "Assets:NewBank" --currency "USD"
+bean account create --name "Assets:NewBank" --currency "USD"
 
 # Create Commodity
-bean-cli commodity create "BTC" --name "Bitcoin"
+bean commodity create "BTC" --name "Bitcoin"
 
 # Fetch and Update Prices
-bean-cli price --update
+bean price --update
 ```
 
 `beancount-cli` is specifically optimized for AI agents, providing both operational guidance and machine-readable interfaces.
@@ -172,7 +172,7 @@ We provide specialized documentation for different types of AI interactions:
 Agents can dynamically retrieve the JSON schema for transactions to ensure valid data generation:
 
 ```bash
-bean-cli transaction schema
+bean transaction schema
 ```
 
 ### Complex Transaction Example
@@ -199,14 +199,14 @@ Agents should aim to generate JSON in this format for a standard purchase with m
 ### Scripting with `uv run`
 For reliable cross-platform execution in agent workflows:
 ```bash
-uv run bean-cli transaction add --json - < tx.json
+uv run bean transaction add --json - < tx.json
 ```
 
 ## Configuration
 
 ### Ledger Discovery
-`bean-cli` uses a 4-tier discovery logic to find your ledger file automatically:
-1.  **Explicit Argument**: Passing the filename directly (e.g. `bean-cli check my.beancount`).
+`bean` uses a 4-tier discovery logic to find your ledger file automatically:
+1.  **Explicit Argument**: Passing the filename directly (e.g. `bean check my.beancount`).
 2.  **`BEANCOUNT_FILE`**: Direct path to a ledger file.
 3.  **`BEANCOUNT_PATH`**: Looks for `main.beancount` inside this directory.
 4.  **Local Directory**: Fallback to `./main.beancount`.
@@ -231,7 +231,7 @@ You can use placeholders to route transactions to dynamic paths:
 Supported placeholders: `{year}`, `{month}`, `{day}`, `{payee}`, `{slug}`.
 
 **Directory Mode (One file per transaction):**
-If `new_transaction_file` points to a **directory**, `bean-cli` will create a new file for each transaction inside that directory, named with an ISO timestamp.
+If `new_transaction_file` points to a **directory**, `bean` will create a new file for each transaction inside that directory, named with an ISO timestamp.
 
 ```beancount
 2023-01-01 custom "cli-config" "new_transaction_file" "inbox/"

@@ -72,29 +72,29 @@ The CLI will use `click` or `typer`.
 
 ### structure
 ```bash
-bean-cli transaction add --date 2024-03-19 --payee "Acme Corp" --narration "Salary" ...
-bean-cli transaction draft ...
-bean-cli account list
-bean-cli account create --name "Assets:NewBank"
+bean transaction add --date 2024-03-19 --payee "Acme Corp" --narration "Salary" ...
+bean transaction draft ...
+bean account list
+bean account create --name "Assets:NewBank"
 ```
 
 ### Complex Input
 For complex multi-leg transactions, the CLI will support:
-1.  **JSON Input (Argument)**: `bean-cli transaction add --json '{"date": "...", "postings": [...]}'`
-2.  **JSON Input (Stdin)**: `cat tx.json | bean-cli transaction add --json -` (Prevents shell escaping issues)
+1.  **JSON Input (Argument)**: `bean transaction add --json '{"date": "...", "postings": [...]}'`
+2.  **JSON Input (Stdin)**: `cat tx.json | bean transaction add --json -` (Prevents shell escaping issues)
 3.  **Interactive Mode**: Prompts for postings one by one.
-4.  **File Input**: `bean-cli transaction add --file tx.json` (or `.beancount` snippet)
+4.  **File Input**: `bean transaction add --file tx.json` (or `.beancount` snippet)
 
 ## 5. Additional Commands (Research)
 
-### `bean-cli check`
+### `bean check`
 *   **Goal**: Wrap `bean-check` functionality to validate the ledger.
 *   **Implementation**: 
     *   Load the file using `beancount.loader.load_file()`.
     *   Capture `errors` list.
     *   Print formatted errors to stderr (filename:line: message).
 
-### `bean-cli map` (Tree Traversal)
+### `bean map` (Tree Traversal)
 *   **Goal**: Visualize the tree of included Beancount files.
 *   **Implementation**:
     *   Custom parser logic to find `include` directives.
@@ -102,15 +102,15 @@ For complex multi-leg transactions, the CLI will support:
     *   Print a tree structure (like `tree` command) showing file paths.
     *   **Note**: Beancount loader flattens includes, so we need a custom recursive file reader or inspect the `options['include']` if available (it might not be preserved in structure). *Better approach*: Parse the file line-by-line looking for `include "..."` strings to build the tree without full Beancount loading (faster, preserves structure).
 
-### `bean-cli report`
+### `bean report`
 *   **Goal**: Simple text reports (balance sheet, holdings).
 *   **Implementation**:
     *   **Balance Sheet**: Use `beancount.reports.balance.balance_sheet()`.
     *   **Holdings**: Iterate over `entries`, compute inventory using `beancount.core.inventory`, print content.
     *   **Trial Balance**: Sum all accounts.
-    *   *Design*: `bean-cli report balances`, `bean-cli report holdings`.
+    *   *Design*: `bean report balances`, `bean report holdings`.
 
-### `bean-cli transaction list`
+### `bean transaction list`
 *   **Goal**: List transactions filtered by account or payee.
 *   **Implementation**:
     *   Use `beancount.query.query_env` or directly iterate over `entries` (faster for simple filters).
@@ -124,5 +124,5 @@ For complex multi-leg transactions, the CLI will support:
     *   Unit tests for `ValidationService` (mocking the Ledger).
     *   Integration tests: Create a temporary Beancount file, run `add_transaction`, verify file content matches expected string.
 *   **Manual Verification**:
-    *   Run `bean-cli transaction add ...` and check the actual `.beancount` file.
+    *   Run `bean transaction add ...` and check the actual `.beancount` file.
     *   Open Fava to ensure the new transaction appears and balances.
