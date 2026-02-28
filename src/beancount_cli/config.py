@@ -10,7 +10,7 @@ class CliConfig(BaseSettings):
     )
     beancount_path: Path | None = Field(default=None, validation_alias="BEANCOUNT_PATH")
 
-    model_config = SettingsConfigDict(env_prefix="BEANCOUNT_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     def get_resolved_ledger(self, override: Path | None = None) -> Path | None:
         if override:
