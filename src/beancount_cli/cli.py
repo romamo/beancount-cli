@@ -679,7 +679,13 @@ Examples:
     report_subs = report_p.add_subparsers(dest="report_cmd", required=True)
 
     report_balance = report_subs.add_parser(
-        "balance-sheet", aliases=["balance", "bs"], help="Balance Sheet report"
+        "balance-sheet",
+        aliases=["balance", "bs"],
+        help="Snapshot of Assets, Liabilities, and Equity.",
+        description=(
+            "Balance Sheet report: shows Assets, Liabilities, and Equity balances, "
+            "optionally converted and valued."
+        ),
     )
     report_balance.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     report_balance.add_argument("--convert", "-c", help="Target currency for unified reporting")
@@ -693,7 +699,13 @@ Examples:
     report_balance.set_defaults(func=report_cmd, report_type="balance-sheet")
 
     report_trial = report_subs.add_parser(
-        "trial-balance", aliases=["trial", "balances"], help="Trial Balance report"
+        "trial-balance",
+        aliases=["trial", "balances"],
+        help="All account balances for ledger-wide checks.",
+        description=(
+            "Trial Balance report: shows balances for all accounts to support "
+            "ledger-wide verification and exposure analysis."
+        ),
     )
     report_trial.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     report_trial.add_argument("--convert", "-c", help="Target currency for unified reporting")
@@ -706,7 +718,14 @@ Examples:
     )
     report_trial.set_defaults(func=report_cmd, report_type="trial-balance")
 
-    report_holdings = report_subs.add_parser("holdings", help="Portfolio holdings report")
+    report_holdings = report_subs.add_parser(
+        "holdings",
+        help="Asset positions with valuation and gains.",
+        description=(
+            "Holdings report: summarizes asset positions with market/cost values "
+            "and unrealized gains."
+        ),
+    )
     report_holdings.add_argument(
         "pos_ledger_file", type=Path, nargs="?", help="Path to ledger file"
     )
@@ -720,7 +739,14 @@ Examples:
     )
     report_holdings.set_defaults(func=report_cmd, report_type="holdings")
 
-    report_audit = report_subs.add_parser("audit", help="Audit report for a specific currency")
+    report_audit = report_subs.add_parser(
+        "audit",
+        help="Transaction-level trace for one currency.",
+        description=(
+            "Audit report: lists transactions that affect a specific currency to "
+            "trace source of exposure."
+        ),
+    )
     report_audit_currency = report_audit.add_argument("audit_currency", help="Currency to audit")
     report_audit_currency.completer = _report_arg1_completer
     report_audit.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
