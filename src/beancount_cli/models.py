@@ -10,7 +10,7 @@ def validate_account_name(v: Any) -> str:
     """Validation logic for AccountName."""
     if not isinstance(v, str):
         raise TypeError("string required")
-    if not re.match(r"^[A-Z][A-Za-z0-9\-]+(?::[A-Z][A-Za-z0-9\-]+)*$", v):
+    if not re.match(r"^[A-Z][A-Za-z0-9\-]*(?::[A-Z0-9][A-Za-z0-9\-]*)+$", v):
         raise ValueError(f"Invalid account name format: {v}")
     return v
 

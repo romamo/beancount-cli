@@ -36,6 +36,11 @@ def test_transaction_model():
 def test_account_name_validation():
     # Valid
     assert validate_account_name("Assets:Cash") == "Assets:Cash"
+    assert validate_account_name("Expenses:Office:Supplies") == "Expenses:Office:Supplies"
+    assert (
+        validate_account_name("Expenses:Office:7622-Equipment-under-3y")
+        == "Expenses:Office:7622-Equipment-under-3y"
+    )
 
     # Invalid
     with pytest.raises(ValueError, match="Invalid account name format"):
