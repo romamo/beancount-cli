@@ -1,10 +1,14 @@
 import argparse
 import json
+import os
+import shlex
 import subprocess  # nosec B404
 import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+import argcomplete
 
 from beancount_cli import __version__
 from beancount_cli.config import CliConfig
@@ -20,6 +24,8 @@ from beancount_cli.services import (
 )
 
 console = Console()
+_files_completer = argcomplete.completers.FilesCompleter()
+_FILE_OPTIONS = {"--file", "-f"}
 
 
 def get_ledger_file(override: Path | None = None) -> Path:
@@ -32,6 +38,81 @@ def get_ledger_file(override: Path | None = None) -> Path:
         )
         sys.exit(1)
     return path
+
+
+def _comp_line_tokens(comp_line: str | None = None) -> list[str]:
+    raw = comp_line if comp_line is not None else os.environ.get("COMP_LINE", "")
+    try:
+        return shlex.split(raw)
+    except ValueError:
+        # Fall back to simple splitting for incomplete quotes during interactive completion.
+        return raw.split()
+
+
+def _file_option_already_present(comp_line: str | None = None) -> bool:
+    return any(token in _FILE_OPTIONS for token in _comp_line_tokens(comp_line))
+
+
+def _completion_validator(completion: str, prefix: str) -> bool:
+    # Completion policy: after --file/-f appears once, do not suggest it again.
+    if completion in _FILE_OPTIONS and _file_option_already_present():
+        return False
+    return completion.startswith(prefix)
+
+
+def _resolve_report_completion_ledger(parsed_args: argparse.Namespace) -> Path | None:
+    ledger_file = getattr(parsed_args, "ledger_file", None)
+    if isinstance(ledger_file, Path) and ledger_file.exists():
+        return ledger_file
+
+    arg2 = getattr(parsed_args, "arg2", None)
+    if isinstance(arg2, str):
+        arg2_path = Path(arg2)
+        if arg2_path.exists():
+            return arg2_path
+
+    config = CliConfig()
+    fallback = config.get_resolved_ledger()
+    if fallback and fallback.exists():
+        return fallback
+
+    return None
+
+
+def _report_arg1_completer(prefix: str, parsed_args: argparse.Namespace, **kwargs) -> list[str]:
+    report_type = str(getattr(parsed_args, "report_type", "")).lower()
+
+    # Keep path completion for non-audit reports where arg1 is typically a ledger path.
+    if report_type != "audit":
+        return list(_files_completer(prefix, parsed_args, **kwargs))
+
+    # For audit, allow path completion if the user starts typing a path-like token.
+    if "/" in prefix or "." in prefix:
+        return list(_files_completer(prefix, parsed_args, **kwargs))
+
+    ledger_file = _resolve_report_completion_ledger(parsed_args)
+    if not ledger_file:
+        return []
+
+    from beancount.core import data
+
+    service = LedgerService(ledger_file)
+    service.load()
+
+    currencies = set(service.get_operating_currencies())
+    currencies.update(service.get_commodities())
+    for entry in service.entries:
+        if isinstance(entry, data.Transaction):
+            for posting in entry.postings:
+                if posting.units:
+                    currencies.add(posting.units.currency)
+                if posting.cost and posting.cost.currency is not None:
+                    currencies.add(posting.cost.currency)
+                if posting.price:
+                    currencies.add(posting.price.currency)
+
+    normalized_prefix = prefix.upper()
+    return sorted(c for c in currencies if c.upper().startswith(normalized_prefix))
 
 
 def print_balances_table(balances, title) -> None:
@@ -632,15 +713,31 @@ Examples:
         """,
     )
     report_p.add_argument(
-        "report_type", help="Type of report: balance-sheet, trial-balance, audit, holdings"
+        "report_type",
+        choices=[
+            "balance-sheet",
+            "balance",
+            "bs",
+            "trial-balance",
+            "trial",
+            "balances",
+            "audit",
+            "holdings",
+        ],
+        help="Type of report: balance-sheet, trial-balance, audit, holdings (aliases supported)",
     )
-    report_p.add_argument(
+    report_arg1 = report_p.add_argument(
         "arg1", nargs="?", help="Currency (for audit) or Ledger File (for others)"
     )
+    report_arg1.completer = _report_arg1_completer
     report_p.add_argument("arg2", nargs="?", help="Ledger File (only if arg1 is Currency)")
     report_p.add_argument("--convert", "-c", help="Target currency for unified reporting")
     report_p.add_argument(
-        "--valuation", "-v", default="market", help="Valuation strategy: 'market' or 'cost'"
+        "--valuation",
+        "-v",
+        choices=["market", "cost"],
+        default="market",
+        help="Valuation strategy: 'market' or 'cost'",
     )
     report_p.add_argument(
         "--limit", "-l", type=int, default=20, help="Limit number of transactions (audit only)"
@@ -747,6 +844,8 @@ Examples for AI Agents:
     price_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     price_p.add_argument("--update", "-u", action="store_true", help="Update prices in ledger")
     price_p.set_defaults(func=price_cmd)
+
+    argcomplete.autocomplete(parser, validator=_completion_validator)
 
     parsed_args = parser.parse_args(args)
     if hasattr(parsed_args, "func"):
