@@ -5,8 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class CliConfig(BaseSettings):
-    beancount_file: Path | None = Field(default=None, alias="file")
-    beancount_path: Path | None = None
+    beancount_file: Path | None = Field(
+        default=None, alias="file", validation_alias="BEANCOUNT_FILE"
+    )
+    beancount_path: Path | None = Field(default=None, validation_alias="BEANCOUNT_PATH")
 
     model_config = SettingsConfigDict(env_prefix="BEANCOUNT_", env_file=".env", extra="ignore")
 
