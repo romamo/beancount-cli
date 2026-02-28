@@ -1,8 +1,14 @@
 import io
 import json
+from argparse import Namespace
 from unittest.mock import patch
 
-from beancount_cli.cli import main
+from beancount_cli.cli import (
+    _completion_validator,
+    _file_option_already_present,
+    _report_arg1_completer,
+    main,
+)
 
 
 def run_cli(*args):
@@ -161,3 +167,36 @@ def test_missing_ledger_file(monkeypatch):
     code, out, err = run_cli("check")
     assert code == 1
     assert "Error: No ledger file found" in out
+
+
+def test_report_audit_currency_completion_from_ledger(temp_beancount_file):
+    parsed_args = Namespace(report_cmd="audit", ledger_file=temp_beancount_file, pos_ledger_file=None)
+    completions = _report_arg1_completer("U", parsed_args)
+    assert "USD" in completions
+
+
+def test_file_option_policy_detects_existing_flag():
+    assert _file_option_already_present("bean --file main.beancount report audit")
+    assert _file_option_already_present("bean -f main.beancount report audit")
+    assert not _file_option_already_present("bean report audit")
+
+
+def test_completion_validator_hides_duplicate_file_option(monkeypatch):
+    monkeypatch.setenv("COMP_LINE", "bean --file main.beancount ")
+    assert not _completion_validator("--file", "--")
+    assert not _completion_validator("-f", "-")
+    assert _completion_validator("--format", "--")
+
+
+def test_report_holdings_help_hides_audit_only_flags():
+    code, out, err = run_cli("report", "holdings", "--help")
+    assert code in (0, None)
+    assert "--limit" not in out
+    assert "--all" not in out
+
+
+def test_report_audit_help_shows_audit_only_flags():
+    code, out, err = run_cli("report", "audit", "--help")
+    assert code in (0, None)
+    assert "--limit" in out
+    assert "--all" in out

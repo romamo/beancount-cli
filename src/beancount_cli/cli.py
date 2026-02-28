@@ -1,10 +1,14 @@
 import argparse
 import json
+import os
+import shlex
 import subprocess  # nosec B404
 import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+import argcomplete
 
 from beancount_cli import __version__
 from beancount_cli.config import CliConfig
@@ -20,6 +24,8 @@ from beancount_cli.services import (
 )
 
 console = Console()
+_files_completer = argcomplete.completers.FilesCompleter()
+_FILE_OPTIONS = {"--file", "-f"}
 
 
 def get_ledger_file(override: Path | None = None) -> Path:
@@ -32,6 +38,70 @@ def get_ledger_file(override: Path | None = None) -> Path:
         )
         sys.exit(1)
     return path
+
+
+def _comp_line_tokens(comp_line: str | None = None) -> list[str]:
+    raw = comp_line if comp_line is not None else os.environ.get("COMP_LINE", "")
+    try:
+        return shlex.split(raw)
+    except ValueError:
+        # Fall back to simple splitting for incomplete quotes during interactive completion.
+        return raw.split()
+
+
+def _file_option_already_present(comp_line: str | None = None) -> bool:
+    return any(token in _FILE_OPTIONS for token in _comp_line_tokens(comp_line))
+
+
+def _completion_validator(completion: str, prefix: str) -> bool:
+    # Completion policy: after --file/-f appears once, do not suggest it again.
+    if completion in _FILE_OPTIONS and _file_option_already_present():
+        return False
+    return completion.startswith(prefix)
+
+
+def _resolve_report_completion_ledger(parsed_args: argparse.Namespace) -> Path | None:
+    ledger_file = getattr(parsed_args, "ledger_file", None)
+    if isinstance(ledger_file, Path) and ledger_file.exists():
+        return ledger_file
+
+    pos_ledger_file = getattr(parsed_args, "pos_ledger_file", None)
+    if isinstance(pos_ledger_file, Path) and pos_ledger_file.exists():
+        return pos_ledger_file
+
+    config = CliConfig()
+    fallback = config.get_resolved_ledger()
+    if fallback and fallback.exists():
+        return fallback
+
+    return None
+
+
+def _report_arg1_completer(prefix: str, parsed_args: argparse.Namespace, **kwargs) -> list[str]:
+    # This completer is attached to the audit currency positional.
+    ledger_file = _resolve_report_completion_ledger(parsed_args)
+    if not ledger_file:
+        return []
+
+    from beancount.core import data
+
+    service = LedgerService(ledger_file)
+    service.load()
+
+    currencies = set(service.get_operating_currencies())
+    currencies.update(service.get_commodities())
+    for entry in service.entries:
+        if isinstance(entry, data.Transaction):
+            for posting in entry.postings:
+                if posting.units:
+                    currencies.add(posting.units.currency)
+                if posting.cost and posting.cost.currency is not None:
+                    currencies.add(posting.cost.currency)
+                if posting.price:
+                    currencies.add(posting.price.currency)
+
+    normalized_prefix = prefix.upper()
+    return sorted(c for c in currencies if c.upper().startswith(normalized_prefix))
 
 
 def print_balances_table(balances, title) -> None:
@@ -177,41 +247,16 @@ def map_cmd(args: argparse.Namespace):
 
 
 def report_cmd(args: argparse.Namespace):
-    report_type = args.report_type.lower()
-
-    arg1 = args.arg1
-    arg2 = args.arg2
-    ledger_file = args.ledger_file
-
-    audit_currency = None
-    if report_type == "audit":
-        if arg1 and arg2:
-            audit_currency = arg1
-            if not ledger_file:
-                ledger_file = Path(arg2)
-        elif arg1:
-            if "." in arg1 or "/" in arg1:
-                if not ledger_file:
-                    ledger_file = Path(arg1)
-                audit_currency = None
-            else:
-                audit_currency = arg1
-    elif arg1 and not ledger_file:
-        ledger_file = Path(arg1)
-
-    ledger_file = get_ledger_file(ledger_file)
+    report_type = args.report_type
+    ledger_file = get_ledger_file(getattr(args, "pos_ledger_file", None) or args.ledger_file)
     service = LedgerService(ledger_file)
     report_service = ReportService(service)
+    audit_currency = getattr(args, "audit_currency", None)
 
-    if report_type in ["trial", "trial-balance"]:
-        report_type = "trial-balance"
-    if report_type in ["bs", "balance-sheet", "balance"]:
-        report_type = "balance-sheet"
+    valuation = getattr(args, "valuation", "market")
+    convert = getattr(args, "convert", None)
 
-    valuation = args.valuation
-    convert = args.convert
-
-    if valuation not in ["market", "cost"]:
+    if report_type != "audit" and valuation not in ["market", "cost"]:
         console.print(
             f"[red]Error: Invalid valuation strategy '{valuation}'. Use 'market' or 'cost'.[/red]"
         )
@@ -238,7 +283,7 @@ def report_cmd(args: argparse.Namespace):
             render_output(data, format_type=format_type, title="Balance Sheet", console=console)
         return
 
-    if report_type in ["trial-balance", "balances"]:
+    if report_type == "trial-balance":
         balances = report_service.get_balances(convert_to=convert, valuation=valuation)
         if format_type == "table":
             print_balances_table(balances, "Trial Balance")
@@ -631,22 +676,85 @@ Examples:
   bean report audit EUR
         """,
     )
-    report_p.add_argument(
-        "report_type", help="Type of report: balance-sheet, trial-balance, audit, holdings"
+    report_subs = report_p.add_subparsers(dest="report_cmd", required=True)
+
+    report_balance = report_subs.add_parser(
+        "balance-sheet",
+        aliases=["balance", "bs"],
+        help="Snapshot of Assets, Liabilities, and Equity.",
+        description=(
+            "Balance Sheet report: shows Assets, Liabilities, and Equity balances, "
+            "optionally converted and valued."
+        ),
     )
-    report_p.add_argument(
-        "arg1", nargs="?", help="Currency (for audit) or Ledger File (for others)"
+    report_balance.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
+    report_balance.add_argument("--convert", "-c", help="Target currency for unified reporting")
+    report_balance.add_argument(
+        "--valuation",
+        "-v",
+        choices=["market", "cost"],
+        default="market",
+        help="Valuation strategy: 'market' or 'cost'",
     )
-    report_p.add_argument("arg2", nargs="?", help="Ledger File (only if arg1 is Currency)")
-    report_p.add_argument("--convert", "-c", help="Target currency for unified reporting")
-    report_p.add_argument(
-        "--valuation", "-v", default="market", help="Valuation strategy: 'market' or 'cost'"
+    report_balance.set_defaults(func=report_cmd, report_type="balance-sheet")
+
+    report_trial = report_subs.add_parser(
+        "trial-balance",
+        aliases=["trial", "balances"],
+        help="All account balances for ledger-wide checks.",
+        description=(
+            "Trial Balance report: shows balances for all accounts to support "
+            "ledger-wide verification and exposure analysis."
+        ),
     )
-    report_p.add_argument(
-        "--limit", "-l", type=int, default=20, help="Limit number of transactions (audit only)"
+    report_trial.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
+    report_trial.add_argument("--convert", "-c", help="Target currency for unified reporting")
+    report_trial.add_argument(
+        "--valuation",
+        "-v",
+        choices=["market", "cost"],
+        default="market",
+        help="Valuation strategy: 'market' or 'cost'",
     )
-    report_p.add_argument("--all", action="store_true", help="Show all transactions (audit only)")
-    report_p.set_defaults(func=report_cmd)
+    report_trial.set_defaults(func=report_cmd, report_type="trial-balance")
+
+    report_holdings = report_subs.add_parser(
+        "holdings",
+        help="Asset positions with valuation and gains.",
+        description=(
+            "Holdings report: summarizes asset positions with market/cost values "
+            "and unrealized gains."
+        ),
+    )
+    report_holdings.add_argument(
+        "pos_ledger_file", type=Path, nargs="?", help="Path to ledger file"
+    )
+    report_holdings.add_argument("--convert", "-c", help="Target currency for unified reporting")
+    report_holdings.add_argument(
+        "--valuation",
+        "-v",
+        choices=["market", "cost"],
+        default="market",
+        help="Valuation strategy: 'market' or 'cost'",
+    )
+    report_holdings.set_defaults(func=report_cmd, report_type="holdings")
+
+    report_audit = report_subs.add_parser(
+        "audit",
+        help="Transaction-level trace for one currency.",
+        description=(
+            "Audit report: lists transactions that affect a specific currency to "
+            "trace source of exposure."
+        ),
+    )
+    report_audit_currency = report_audit.add_argument("audit_currency", help="Currency to audit")
+    report_audit_currency.completer = _report_arg1_completer
+    report_audit.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
+    report_audit.add_argument(
+        "--limit", "-l", type=int, default=20, help="Limit number of transactions"
+    )
+    report_audit.add_argument("--all", action="store_true", help="Show all transactions")
+    report_audit.set_defaults(func=report_cmd, report_type="audit")
 
     # Transaction Subcommand
     tx_p = subparsers.add_parser("transaction", help="Manage transactions.")
@@ -747,6 +855,8 @@ Examples for AI Agents:
     price_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     price_p.add_argument("--update", "-u", action="store_true", help="Update prices in ledger")
     price_p.set_defaults(func=price_cmd)
+
+    argcomplete.autocomplete(parser, validator=_completion_validator)
 
     parsed_args = parser.parse_args(args)
     if hasattr(parsed_args, "func"):
