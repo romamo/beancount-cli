@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-03-01
+
+### Fixed
+- Fixed ledger discovery via environment variables `BEANCOUNT_FILE` and `BEANCOUNT_PATH`.
+- Fixed CLI argument parsing to allow global flags (`--file`, `--format`) to be placed after subcommands.
+
+### Added
+- Improved `.env` file support for configuration.
+
 ## [0.2.1] - 2026-02-27
 
 ### Added

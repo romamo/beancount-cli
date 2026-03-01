@@ -583,38 +583,47 @@ def price_cmd(args: argparse.Namespace):
 
 
 def main(args=None):
+    # Create a parent parser for shared arguments (--file, --format)
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument(
+        "--file", "-f", dest="ledger_file", type=Path, help="Path to main.beancount file"
+    )
+    parent_parser.add_argument(
+        "--format",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Global output format (can be used before or after command)",
+    )
+
     parser = argparse.ArgumentParser(
         description="Beancount CLI tool for managing ledgers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[parent_parser],
         epilog="""
 Environment Variables:
   BEANCOUNT_FILE    Default ledger file to use if --file (-f) is not specified.
   
-Global Flags:
+Global Flags (can be used before or after the command):
   --format json     Best for single-item structural responses or piping into `jq`.
   --format csv      Highly recommended for AI Agents querying lists (3-5x token savings).
   --format table    Default terminal formatting for human-readable outputs.
         """,
     )
     parser.add_argument(
-        "--file", "-f", dest="ledger_file", type=Path, help="Path to main.beancount file"
-    )
-    parser.add_argument(
         "--version", action="version", version=f"beancount-cli {__version__}", help="Show version"
-    )
-    parser.add_argument(
-        "--format", choices=["table", "json", "csv"], default="table", help="Global output format"
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Check
-    check_p = subparsers.add_parser("check", help="Validate the ledger file")
+    check_p = subparsers.add_parser("check", help="Validate the ledger file", parents=[parent_parser])
     check_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     check_p.set_defaults(func=check_cmd)
 
     # Tree
-    tree_p = subparsers.add_parser("tree", help="Visualize the tree of included files")
+    tree_p = subparsers.add_parser(
+        "tree", help="Visualize the tree of included files", parents=[parent_parser]
+    )
     tree_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     tree_p.set_defaults(func=map_cmd)
 
@@ -622,6 +631,7 @@ Global Flags:
     report_p = subparsers.add_parser(
         "report",
         help="Generate simple reports.",
+        parents=[parent_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -649,10 +659,12 @@ Examples:
     report_p.set_defaults(func=report_cmd)
 
     # Transaction Subcommand
-    tx_p = subparsers.add_parser("transaction", help="Manage transactions.")
+    tx_p = subparsers.add_parser("transaction", help="Manage transactions.", parents=[parent_parser])
     tx_subs = tx_p.add_subparsers(dest="tx_cmd", required=True)
 
-    tx_list = tx_subs.add_parser("list", help="List transactions matching filters.")
+    tx_list = tx_subs.add_parser(
+        "list", help="List transactions matching filters.", parents=[parent_parser]
+    )
     tx_list.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     tx_list.add_argument("--account", "-a", help="Filter by account regex")
     tx_list.add_argument("--payee", "-p", help="Filter by payee regex")
@@ -663,6 +675,7 @@ Examples:
     tx_add = tx_subs.add_parser(
         "add",
         help="Add a new transaction.",
+        parents=[parent_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples for AI Agents:
@@ -681,20 +694,23 @@ Examples for AI Agents:
     )
     tx_add.set_defaults(func=tx_add_cmd)
 
-    tx_schema = tx_subs.add_parser("schema", help="Output the JSON schema for transactions")
+    tx_schema = tx_subs.add_parser(
+        "schema", help="Output the JSON schema for transactions", parents=[parent_parser]
+    )
     tx_schema.set_defaults(func=tx_schema_cmd)
 
     # Account Subcommand
-    acc_p = subparsers.add_parser("account", help="Manage accounts.")
+    acc_p = subparsers.add_parser("account", help="Manage accounts.", parents=[parent_parser])
     acc_subs = acc_p.add_subparsers(dest="acc_cmd", required=True)
 
-    acc_list = acc_subs.add_parser("list", help="List all accounts.")
+    acc_list = acc_subs.add_parser("list", help="List all accounts.", parents=[parent_parser])
     acc_list.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     acc_list.set_defaults(func=account_list_cmd)
 
     acc_create = acc_subs.add_parser(
         "create",
         help="Create a new account.",
+        parents=[parent_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples for AI Agents:
@@ -715,12 +731,13 @@ Examples for AI Agents:
     acc_create.set_defaults(func=account_create_cmd)
 
     # Commodity Subcommand
-    comm_p = subparsers.add_parser("commodity", help="Manage commodities.")
+    comm_p = subparsers.add_parser("commodity", help="Manage commodities.", parents=[parent_parser])
     comm_subs = comm_p.add_subparsers(dest="comm_cmd", required=True)
 
     comm_create = comm_subs.add_parser(
         "create",
         help="Create a new commodity.",
+        parents=[parent_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples for AI Agents:
@@ -735,7 +752,7 @@ Examples for AI Agents:
     comm_create.set_defaults(func=commodity_create_cmd)
 
     # Format
-    format_p = subparsers.add_parser("format", help="Format ledger file(s)")
+    format_p = subparsers.add_parser("format", help="Format ledger file(s)", parents=[parent_parser])
     format_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     format_p.add_argument(
         "--recursive", "-r", action="store_true", help="Format all included files"
@@ -743,7 +760,7 @@ Examples for AI Agents:
     format_p.set_defaults(func=format_cmd)
 
     # Price
-    price_p = subparsers.add_parser("price", help="Fetch and update prices")
+    price_p = subparsers.add_parser("price", help="Fetch and update prices", parents=[parent_parser])
     price_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     price_p.add_argument("--update", "-u", action="store_true", help="Update prices in ledger")
     price_p.set_defaults(func=price_cmd)
