@@ -135,3 +135,44 @@ def test_report_balances(temp_beancount_file):
     assert balances["Assets:Cash"]["units"]["USD"] == Decimal("990.00")
     assert "Expenses:Food" in balances
     assert balances["Expenses:Food"]["units"]["USD"] == Decimal("10.00")
+
+
+def test_holdings_in_target_currency_equal_position_amount(tmp_path):
+    """When an asset is held in the report currency, Value and Cost equal the position.
+
+    For positions already in the target currency (e.g. EUR asset with report in EUR),
+    market value and cost basis must both equal the position amount. They must not
+    be doubled by counting the position both as "in target" and again after conversion.
+    """
+    ledger_file = tmp_path / "ledger.beancount"
+    position_amount = "1000.00"
+    ledger_file.write_text(
+        'option "title" "Holdings test"\n'
+        'option "operating_currency" "EUR"\n'
+        "2020-01-01 open Assets:Fixed:Item EUR\n"
+        "2022-01-01 * \"Acquired\" \"Item\"\n"
+        f"  Assets:Fixed:Item    {position_amount} EUR\n"
+        f"  Equity:Opening      -{position_amount} EUR\n"
+    )
+    from beancount_cli.services import LedgerService, ReportService
+
+    ledger_service = LedgerService(ledger_file)
+    ledger_service.load()
+    report_service = ReportService(ledger_service)
+    expected = Decimal(position_amount)
+
+    for valuation in ("market", "cost"):
+        holdings = report_service.get_holdings(
+            valuation=valuation, target_currencies=["EUR"]
+        )
+        assert "accounts" in holdings
+        assert "Assets:Fixed:Item" in holdings["accounts"]
+        acc = holdings["accounts"]["Assets:Fixed:Item"]
+        assert acc["market_values"]["EUR"] == expected, (
+            f"valuation={valuation}: market value should equal position ({expected})"
+        )
+        assert acc["cost_basis"]["EUR"] == expected, (
+            f"valuation={valuation}: cost basis should equal position ({expected})"
+        )
+    assert holdings["totals"]["EUR"]["market"] == expected
+    assert holdings["totals"]["EUR"]["cost"] == expected
