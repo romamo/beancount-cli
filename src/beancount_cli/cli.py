@@ -616,7 +616,9 @@ Global Flags (can be used before or after the command):
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Check
-    check_p = subparsers.add_parser("check", help="Validate the ledger file", parents=[parent_parser])
+    check_p = subparsers.add_parser(
+        "check", help="Validate the ledger file", parents=[parent_parser]
+    )
     check_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     check_p.set_defaults(func=check_cmd)
 
@@ -659,7 +661,9 @@ Examples:
     report_p.set_defaults(func=report_cmd)
 
     # Transaction Subcommand
-    tx_p = subparsers.add_parser("transaction", help="Manage transactions.", parents=[parent_parser])
+    tx_p = subparsers.add_parser(
+        "transaction", help="Manage transactions.", parents=[parent_parser]
+    )
     tx_subs = tx_p.add_subparsers(dest="tx_cmd", required=True)
 
     tx_list = tx_subs.add_parser(
@@ -752,7 +756,9 @@ Examples for AI Agents:
     comm_create.set_defaults(func=commodity_create_cmd)
 
     # Format
-    format_p = subparsers.add_parser("format", help="Format ledger file(s)", parents=[parent_parser])
+    format_p = subparsers.add_parser(
+        "format", help="Format ledger file(s)", parents=[parent_parser]
+    )
     format_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     format_p.add_argument(
         "--recursive", "-r", action="store_true", help="Format all included files"
@@ -760,7 +766,9 @@ Examples for AI Agents:
     format_p.set_defaults(func=format_cmd)
 
     # Price
-    price_p = subparsers.add_parser("price", help="Fetch and update prices", parents=[parent_parser])
+    price_p = subparsers.add_parser(
+        "price", help="Fetch and update prices", parents=[parent_parser]
+    )
     price_p.add_argument("pos_ledger_file", type=Path, nargs="?", help="Path to ledger file")
     price_p.add_argument("--update", "-u", action="store_true", help="Update prices in ledger")
     price_p.set_defaults(func=price_cmd)

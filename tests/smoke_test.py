@@ -43,7 +43,7 @@ def test_smoke():
 
     # 4. Check with a minimal ledger file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".beancount", delete=False) as f:
-        f.write('2023-01-01 open Assets:Cash USD\n')
+        f.write("2023-01-01 open Assets:Cash USD\n")
         temp_path = Path(f.name)
 
     try:
