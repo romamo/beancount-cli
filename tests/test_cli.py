@@ -170,7 +170,9 @@ def test_missing_ledger_file(monkeypatch):
 
 
 def test_report_audit_currency_completion_from_ledger(temp_beancount_file):
-    parsed_args = Namespace(report_cmd="audit", ledger_file=temp_beancount_file, pos_ledger_file=None)
+    parsed_args = Namespace(
+        report_cmd="audit", ledger_file=temp_beancount_file, pos_ledger_file=None
+    )
     completions = _report_arg1_completer("U", parsed_args)
     assert "USD" in completions
 

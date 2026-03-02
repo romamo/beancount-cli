@@ -150,7 +150,7 @@ def test_holdings_in_target_currency_equal_position_amount(tmp_path):
         'option "title" "Holdings test"\n'
         'option "operating_currency" "EUR"\n'
         "2020-01-01 open Assets:Fixed:Item EUR\n"
-        "2022-01-01 * \"Acquired\" \"Item\"\n"
+        '2022-01-01 * "Acquired" "Item"\n'
         f"  Assets:Fixed:Item    {position_amount} EUR\n"
         f"  Equity:Opening      -{position_amount} EUR\n"
     )
@@ -162,9 +162,7 @@ def test_holdings_in_target_currency_equal_position_amount(tmp_path):
     expected = Decimal(position_amount)
 
     for valuation in ("market", "cost"):
-        holdings = report_service.get_holdings(
-            valuation=valuation, target_currencies=["EUR"]
-        )
+        holdings = report_service.get_holdings(valuation=valuation, target_currencies=["EUR"])
         assert "accounts" in holdings
         assert "Assets:Fixed:Item" in holdings["accounts"]
         acc = holdings["accounts"]["Assets:Fixed:Item"]
