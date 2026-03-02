@@ -74,7 +74,7 @@ wheels = [
 
 [[package]]
 name = "beancount-cli"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "." }
 dependencies = [
     { name = "argcomplete" },
