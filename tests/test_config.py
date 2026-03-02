@@ -10,7 +10,7 @@ def test_beancount_file_env_var_is_respected(monkeypatch, tmp_path):
     monkeypatch.setenv("BEANCOUNT_FILE", str(ledger))
 
     config = CliConfig()
-    assert config.beancount_file == ledger
+    assert config.file == ledger
     assert config.get_resolved_ledger() == ledger
 
 
@@ -25,5 +25,5 @@ def test_beancount_path_env_var_is_respected(monkeypatch, tmp_path):
     monkeypatch.setenv("BEANCOUNT_PATH", str(ledger_dir))
 
     config = CliConfig()
-    assert config.beancount_path == ledger_dir
+    assert config.path == ledger_dir
     assert config.get_resolved_ledger() == main_file

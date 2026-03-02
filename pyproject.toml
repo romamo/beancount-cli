@@ -1,6 +1,6 @@
 [project]
 name = "beancount-cli"
-version = "0.2.1"
+version = "0.2.3"
 description = "A CLI tool to manage Beancount ledgers"
 readme = "README.md"
 authors = [
@@ -15,6 +15,7 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "beanprice>=2.1.0",
     "pydantic-settings>=2.0.0",
+    "argcomplete>=3.6.3",
 ]
 keywords = ["beancount", "cli", "accounting", "automation", "agent"]
 classifiers = [
