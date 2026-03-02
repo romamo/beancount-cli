@@ -20,6 +20,7 @@ A robust command-line interface and Python library for programmatically managing
 -   **Reporting**: Generate balance, holding, and audit reports with multi-currency conversion.
 -   **Composability**: Built for Unix piping (`json` | `csv`) and batch processing via STDIN.
 -   **Configuration**: Custom Beancount directives for routing new entries to specific files.
+-   **Tab Completion**: We provide tab completions for bash and zsh.
 
 ## Installation
 
@@ -37,7 +38,7 @@ For development:
 uv sync
 ```
 
-## Usage
+For setting up tab completion for your shell, see [Tab Completion](#tab-completion) under [Configuration](#configuration).
 
 ### Global Formatting Flag
 
@@ -236,6 +237,32 @@ If `new_transaction_file` points to a **directory**, `bean` will create a new fi
 ```beancount
 2023-01-01 custom "cli-config" "new_transaction_file" "inbox/"
 ```
+
+### Tab Completion
+
+`bean` supports shell tab completion through `argcomplete`.
+
+For the current Bash session:
+
+```bash
+eval "$(register-python-argcomplete bean)"
+```
+
+For the current Zsh session:
+
+```bash
+autoload -U +X bashcompinit && bashcompinit
+eval "$(register-python-argcomplete bean)"
+```
+
+To enable globally for future sessions:
+
+```bash
+activate-global-python-argcomplete --user
+```
+
+If completion does not work, confirm your shell has loaded the generated completion
+script and that `register-python-argcomplete` is available in your environment.
 
 ## Development
 
