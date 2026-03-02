@@ -368,11 +368,14 @@ class ReportService:
                     # Valuation logic
                     total_converted = Decimal(0)
                     for pos in cb:
-                        if pos.units.currency == convert_to:
-                            total_converted += pos.units.number
                         # Get operating currencies for transitive conversion
                         # (e.g. PPFD -> EUR -> USD)
                         via_currencies = self.ledger.get_operating_currencies()
+
+                        if pos.units.currency == convert_to:
+                            # Already in target currency: add once (do not also convert)
+                            total_converted += pos.units.number
+                            continue
 
                         if valuation == "market":
                             # Use beancount.core.convert for robust conversion
