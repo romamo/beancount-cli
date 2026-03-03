@@ -85,7 +85,4 @@ extend-immutable-calls = ["agentyper.Argument", "agentyper.Option", "typer.Argum
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
 
-[tool.uv.sources]
-agentyper = { path = "../agenter" }
-
 

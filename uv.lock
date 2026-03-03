@@ -5,27 +5,14 @@ requires-python = ">=3.10"
 [[package]]
 name = "agentyper"
 version = "0.1.3"
-source = { directory = "../agenter" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "rich" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "argcomplete", marker = "extra == 'completion'", specifier = ">=3.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-]
-provides-extras = ["completion"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "bandit", specifier = ">=1.8.3" },
-    { name = "mypy", specifier = ">=1.15.0" },
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-cov", specifier = ">=6.0.0" },
-    { name = "ruff" },
+sdist = { url = "https://files.pythonhosted.org/packages/c1/4e/dc0ad914ee2db88541808eea3c74bc875a46e62b09ea38fd3e0c928b60af/agentyper-0.1.3.tar.gz", hash = "sha256:14519ade330e82a393dd5ebc50a732b440db5ea2a51f352c490bf3e4383d6715", size = 24629, upload-time = "2026-03-03T19:11:41.784Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/e1/4ee4eaaed62e04dac5c15f610ac5d75cb68b0621df5281ba2bed516b90c5/agentyper-0.1.3-py3-none-any.whl", hash = "sha256:2bfb7c95b85c38c3eb5f1d5515a4e16d8a0bc5bdc715d0c41ffbf230c7068c0d", size = 25298, upload-time = "2026-03-03T19:11:43.027Z" },
 ]
 
 [[package]]
@@ -114,7 +101,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentyper", directory = "../agenter" },
+    { name = "agentyper" },
     { name = "beancount", specifier = ">=3.0.0" },
     { name = "beanprice", specifier = ">=2.1.0" },
     { name = "beanquery", specifier = ">=0.1.0" },
