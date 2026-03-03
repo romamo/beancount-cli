@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "agentyper"
-version = "0.1.1"
+version = "0.1.3"
 source = { directory = "../agenter" }
 dependencies = [
     { name = "pydantic" },
