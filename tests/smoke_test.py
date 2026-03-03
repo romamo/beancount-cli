@@ -33,13 +33,13 @@ def test_smoke():
 
     # 3. Check transaction schema command
     result = subprocess.run(
-        [sys.executable, "-m", "beancount_cli.cli", "transaction", "schema"],
+        [sys.executable, "-m", "beancount_cli.cli", "transaction", "add", "--schema"],
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 0
-    assert "TransactionModel" in result.stdout
+    assert "properties" in result.stdout
 
     # 4. Check with a minimal ledger file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".beancount", delete=False) as f:
