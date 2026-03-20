@@ -94,7 +94,7 @@ bean report trial-balance main.beancount
 bean report holdings main.beancount
 
 # Audit a specific currency (Source of Exposure)
-bean report audit USD main.beancount
+bean report audit --currency USD main.beancount
 ```
 
 > [!TIP]
