@@ -5,6 +5,7 @@ from beancount.core import amount, data, position
 from beancount_cli.models import (
     AccountName,
     AmountModel,
+    BalanceModel,
     CostModel,
     CurrencyCode,
     PostingModel,
@@ -97,4 +98,15 @@ def from_core_transaction(core: data.Transaction) -> TransactionModel:
         links=set(core.links) if core.links else set(),
         postings=[from_core_posting(p) for p in core.postings],
         meta=core.meta or {},
+    )
+
+
+def to_core_balance(model: BalanceModel) -> data.Balance:
+    return data.Balance(
+        meta=model.meta or {},
+        date=model.date,
+        account=str(model.account),
+        amount=to_core_amount(model.amount),
+        diff_amount=None,
+        tolerance=None,
     )

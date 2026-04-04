@@ -11,9 +11,9 @@ A robust command-line interface and Python library for programmatically managing
     -   Add transactions via CLI arguments or JSON (stdin supported).
     -   Draft mode support (flag `!`).
 -   **Entities**:
-    -   Manage Accounts (list, create).
-    -   Manage Commodities (create).
-    -   Manage Prices (fetch, update).
+    -   Manage Accounts (list, create, balance assertion).
+    -   Manage Commodities (list, create, check undeclared).
+    -   Manage Prices (check gaps, fetch/update via bean-price).
 -   **Formatting**:
     -   Auto-format ledgers (`bean-format` wrapper).
     -   Global output formatting: `--format` support (`table`, `json`, `csv`) for all data commands.
@@ -136,7 +136,7 @@ bean transaction add main.beancount --json ... --draft
 
 ### Manage Accounts & Commodities
 
-All creation commands (`transaction add`, `account create`, `commodity create`) support batch processing via JSON arrays on STDIN.
+All creation commands (`transaction add`, `account create`, `commodity create`) support batch processing via JSON arrays on STDIN. Use `--target` to override the destination file.
 
 ```bash
 # Batch add transactions from a file
@@ -146,19 +146,46 @@ cat txs.json | bean transaction add --json -
 bean --format json account list --file old.beancount | bean account create --json -
 ```
 
-**Standard CLI usage:**
+**Accounts:**
 ```bash
-# List Accounts
+# List accounts
 bean account list
 
-# Create Account
+# Create account
 bean account create --name "Assets:NewBank" --currency "USD"
 
-# Create Commodity
-bean commodity create "BTC" --name "Bitcoin"
+# Add a balance assertion
+bean account balance --json '{"date": "2024-01-01", "account": "Assets:Bank", "amount": {"number": 1000, "currency": "USD"}}'
+```
 
-# Fetch and Update Prices
-bean price --update
+**Commodities:**
+```bash
+# List all declared commodities
+bean commodity list
+
+# List by asset class
+bean commodity list --asset-class stock
+
+# Find currencies used in transactions but missing a commodity directive
+bean commodity check
+
+# Create a commodity
+bean commodity create "BTC" --name "Bitcoin"
+```
+
+**Prices:**
+```bash
+# Check for periods of missing price data
+bean price check
+
+# Check with weekly rate and 14-day tolerance
+bean price check --rate weekly --tolerance 14
+
+# Fetch latest quotes (dry run)
+bean price fetch --dry-run
+
+# Fetch and write new prices to the ledger
+bean price fetch --update
 ```
 
 `beancount-cli` is specifically optimized for AI agents, providing both operational guidance and machine-readable interfaces.

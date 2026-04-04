@@ -7,6 +7,14 @@ from rich.console import Console
 from rich.table import Table
 
 console = Console()
+error_console = Console(stderr=True)
+
+
+def read_json_input(json_data: str) -> str:
+    """Read JSON from a string or from STDIN when json_data is '-'."""
+    if json_data == "-":
+        return sys.stdin.read()
+    return json_data
 
 
 def get_ledger_file(override: str | Path | None = None) -> Path:

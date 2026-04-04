@@ -1,3 +1,4 @@
+import json
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
@@ -17,17 +18,44 @@ def check(
 ):
     """Validate the ledger file."""
     actual_file = get_ledger_file(ledger_file or file)
-    service = LedgerService(actual_file)
-    service.load()
+    format_ = "table" if _is_table_format() else "json"
+
+    try:
+        service = LedgerService(actual_file)
+        service.load()
+    except FileNotFoundError as exc:
+        typer.exit_error(
+            str(exc), code=typer.EXIT_SYSTEM, error_type="FileNotFoundError", format_=format_
+        )
+    except OSError as exc:
+        typer.exit_error(str(exc), code=typer.EXIT_SYSTEM, error_type="OSError", format_=format_)
 
     if not service.errors:
         console.print("[green]No errors found.[/green]")
+        return
+
+    if format_ == "json":
+        payload = {
+            "error": True,
+            "error_type": "BeancountValidationError",
+            "exit_code": typer.EXIT_VALIDATION,
+            "errors": [
+                {
+                    "location": f"{e.source['filename']}:{e.source['lineno']}"
+                    if e.source
+                    else None,
+                    "message": e.message,
+                }
+                for e in service.errors
+            ],
+        }
+        print(json.dumps(payload), file=sys.stderr)
     else:
         for error in service.errors:
             source = error.source
             loc = f"{source['filename']}:{source['lineno']}" if source else "?"
             console.print(f"[red]{loc}: {error.message}[/red]")
-        sys.exit(typer.EXIT_VALIDATION)
+    raise SystemExit(typer.EXIT_VALIDATION)
 
 
 def tree(
@@ -78,63 +106,4 @@ def format_cmd(
 
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Error running bean-format: {e.stderr}[/red]")
-        sys.exit(typer.EXIT_SYSTEM)
-
-
-def price(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-    update: bool = typer.Option(False, "--update", "-u", help="Update prices in ledger"),
-):
-    """Fetch and update prices."""
-    actual_file = get_ledger_file(ledger_file or file)
-    console.print(f"Fetching prices for {actual_file}...")
-
-    try:
-        cmd = ["bean-price", str(actual_file)]
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)  # nosec B603
-        prices_output = result.stdout.strip()
-
-        if not prices_output:
-            console.print("[yellow]No new prices found.[/yellow]")
-            return
-
-        if update:
-            service = MapService(actual_file)
-            inc_tree = service.get_include_tree()
-            target_price_file = actual_file
-
-            def find_price_file(t):
-                for k, v in t.items():
-                    if "price" in Path(k).name.lower() and "beancount" in k:
-                        return Path(k)
-                    res = find_price_file(v)
-                    if res:
-                        return res
-                return None
-
-            found = find_price_file(inc_tree)
-            if found:
-                target_price_file = found
-
-            from datetime import datetime
-
-            with open(target_price_file, "a") as f:
-                f.write(f"\n\n; Prices fetched {datetime.now().isoformat()}\n")
-                f.write(prices_output)
-                f.write("\n")
-
-            console.print(
-                f"[green]Appended {len(prices_output.splitlines())} prices to {target_price_file.name}[/green]"
-            )
-        else:
-            console.print(prices_output)
-
-    except subprocess.CalledProcessError as e:
-        console.print(f"[red]Error running bean-price: {e.stderr}[/red]")
-        sys.exit(typer.EXIT_SYSTEM)
-    except FileNotFoundError:
-        console.print("[red]Error: bean-price not found. Is it installed?[/red]")
         sys.exit(typer.EXIT_SYSTEM)
