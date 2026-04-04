@@ -101,3 +101,29 @@ class AccountModel(BaseModel):
 
     currencies: list[CurrencyCode.Input] = Field(default_factory=list)
     meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class BalanceModel(BaseModel):
+    date: datetime.date
+    account: AccountName.Input
+    amount: AmountModel
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class CommodityModel(BaseModel):
+    currency: CurrencyCode.Input
+    date: datetime.date | None = None
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class UndeclaredCommodityModel(BaseModel):
+    currency: CurrencyCode.Input
+
+
+class PriceGapModel(BaseModel):
+    currency: CurrencyCode.Input
+    target_currency: CurrencyCode.Input | None = None
+    gap_start: datetime.date
+    last_available_date: datetime.date | None = None
+    days_missing: int
+    fetch_command: str | None = None

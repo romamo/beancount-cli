@@ -1,11 +1,10 @@
 import json
-import sys
 from pathlib import Path
 
 import agentyper as typer
 from pydantic import TypeAdapter
 
-from beancount_cli.commands.common import _is_table_format, get_ledger_file
+from beancount_cli.commands.common import _is_table_format, get_ledger_file, read_json_input
 from beancount_cli.models import TransactionModel
 from beancount_cli.services import TransactionService
 
@@ -51,23 +50,19 @@ def tx_add(
     ),
     draft: bool = typer.Option(False, "--draft", help="Mark as pending (!)"),
     print_only: bool = typer.Option(False, "--print", help="Print only, do not write"),
+    target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
 ):
     """Add a new transaction."""
     actual_file = get_ledger_file(ledger_file or file)
     service = TransactionService(actual_file)
 
-    if json_data == "-":
-        content = sys.stdin.read()
-    else:
-        content = json_data
-
-    data = json.loads(content)
+    data = json.loads(read_json_input(json_data))
 
     if isinstance(data, list):
         ta = TypeAdapter(list[TransactionModel])
         models = ta.validate_python(data)
         for m in models:
-            service.add_transaction(m, draft=draft, print_only=print_only)
+            service.add_transaction(m, draft=draft, print_only=print_only, target_file=target)
     else:
         model = TransactionModel(**data)
-        service.add_transaction(model, draft=draft, print_only=print_only)
+        service.add_transaction(model, draft=draft, print_only=print_only, target_file=target)

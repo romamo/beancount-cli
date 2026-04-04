@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8] - 2026-04-04
+
+### Added
+- `commodity list`: List all declared commodities, with optional `--asset-class` filter.
+- `commodity check`: Identify currencies used in transactions that are missing a `commodity` directive.
+- `price check`: Identify periods of missing price data for held assets. Supports `--rate` (daily, weekday, weekly, monthly) and `--tolerance` (days before flagging a gap).
+- `price fetch`: Fetch latest quotes via the `bean-price` library with `--update`, `--fill-gaps`, `--dry-run`, `--inactive`, and `--verbose` options.
+- `account balance`: Add a `balance` assertion directive to the ledger via `--json`.
+- `--target` flag on `transaction add`, `account create`, and `commodity create` to override the destination file, bypassing config-driven routing.
+- Structured JSON error output for `check --format json` with typed `error_type` and `exit_code` fields.
+
+### Changed
+- `price` is now a subcommand group (`price check`, `price fetch`), replacing the former single `price` command.
+- `check` now exits with code `2` on missing/unreadable files (system error) and code `1` on validation errors, instead of raising an uncaught exception.
+
 ## [0.2.6] - 2026-03-03
 
 ### Changed

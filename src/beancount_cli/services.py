@@ -8,8 +8,16 @@ from beancount import loader
 from beancount.core import data
 from beancount.parser import printer
 
-from beancount_cli.adapters import from_core_transaction, to_core_transaction
-from beancount_cli.models import AccountModel, CurrencyCode, TransactionModel
+from beancount_cli.adapters import from_core_transaction, to_core_balance, to_core_transaction
+from beancount_cli.models import (
+    AccountModel,
+    BalanceModel,
+    CommodityModel,
+    CurrencyCode,
+    PriceGapModel,
+    TransactionModel,
+    UndeclaredCommodityModel,
+)
 
 
 class LedgerService:
@@ -47,21 +55,66 @@ class LedgerService:
             self.load()
         return sorted([e.currency for e in self.entries if isinstance(e, data.Commodity)])
 
+    def get_used_currencies(self) -> set[str]:
+        """
+        Extract all unique currency strings used in postings, cost bases, or prices.
+        """
+        if not self._loaded:
+            self.load()
+        used = set()
+        for e in self.entries:
+            if isinstance(e, data.Transaction):
+                for p in e.postings:
+                    if p.units:
+                        used.add(p.units.currency)
+                    if p.cost and p.cost.currency:
+                        used.add(p.cost.currency)
+                    if p.price and p.price.currency:
+                        used.add(p.price.currency)
+        return used
+
+    def get_inventory(self, at_date: date) -> set[str]:
+        """
+        Return the set of currencies that have a non-zero balance on a given date.
+        """
+        if not self._loaded:
+            self.load()
+        from beancount.core import convert
+        from beancount.core.inventory import Inventory
+
+        inv = Inventory()
+        for e in self.entries:
+            if e.date > at_date:
+                break
+            if isinstance(e, data.Transaction):
+                for p in e.postings:
+                    if p.account.startswith(("Assets", "Liabilities")):
+                        inv.add_position(p)
+
+        return {
+            pos.units.currency
+            for pos in inv.reduce(convert.get_units)
+            if not pos.units.number.is_zero()
+        }
+
+    def get_price_map(self) -> dict:
+        if not self._loaded:
+            self.load()
+        from beancount.core import prices
+
+        return prices.build_price_map(self.entries)
+
     def get_custom_config(self, key: str) -> str | None:
         """
         Extract config from 'custom "cli-config" "key" "value"' directives.
         """
         if not self._loaded:
             self.load()
-        # Iterate in reverse to get latest override? Or first?
-        # Usually config is at top.
-        # Iterate in reverse to get latest override
         for e in reversed(self.entries):
             if isinstance(e, data.Custom) and e.type == "cli-config":
                 if len(e.values) < 2:
                     continue
 
-                # Check directly the values
                 val_key = e.values[0]
                 val_value = e.values[1]
 
@@ -88,15 +141,12 @@ class ValidationService:
 
         for p in tx.postings:
             if p.account not in valid_accounts:
-                # Check if it's a known parent? No, Beancount requires Open directives.
-                # Just flag it.
+                # Beancount requires explicit Open directives; account hierarchies are not implicit.
                 errors.append(f"Account '{p.account}' does not exist (no Open directive).")
 
             if p.units.currency not in valid_commodities:
-                # Beancount doesn't strictly require Commodity directives for all currencies
-                # (e.g. USD), but if strict mode is on... let's just warn or skip common ones?
-                # Actually beancount allow_undefined_currencies option controls this.
-                # For now, let's trust the ledger options or just skip this check if empty.
+                # Beancount's allow_undefined_currencies option controls strict enforcement;
+                # skip when no commodities are declared so we don't false-positive on plain ledgers.
                 if valid_commodities:
                     errors.append(f"Currency '{p.units.currency}' not in declared commodities.")
 
@@ -175,7 +225,11 @@ class TransactionService:
         return [from_core_transaction(tx) for tx in filtered_txs]
 
     def add_transaction(
-        self, tx: TransactionModel, draft: bool = False, print_only: bool = False
+        self,
+        tx: TransactionModel,
+        draft: bool = False,
+        print_only: bool = False,
+        target_file: Path | None = None,
     ) -> None:
         """
         Add a transaction to the ledger.
@@ -203,7 +257,7 @@ class TransactionService:
 
         # Check for configured inbox
         inbox_file_str = self.ledger_service.get_custom_config("new_transaction_file")
-        target_file = self.ledger_file
+        actual_target = target_file or self.ledger_file
 
         if inbox_file_str:
             # Resolve relative to ledger file
@@ -236,39 +290,33 @@ class TransactionService:
                 formatted_path = inbox_file_str
 
             target_path = (self.ledger_file.parent / formatted_path).resolve()
-
-            # If the formatted path ends in extension, treat as file.
-            # If it doesn't, treat as dir and append default filename.
-            # Simple heuristic: if it has an extension, it's a file.
+            actual_target = target_path
             if target_path.suffix:
                 # Ensure parent dirs exist
                 target_path.parent.mkdir(parents=True, exist_ok=True)
-                target_file = target_path
-
                 # Append mode for existing file or new file
-                mode = "a" if target_file.exists() else "w"
-                with open(target_file, mode) as f:
+                mode = "a" if actual_target.exists() else "w"
+                with open(actual_target, mode) as f:
                     if mode == "a":
                         f.write("\n")
                     f.write(entry_str)
-                print(f"Transaction appended to {target_file}")
+                print(f"Transaction appended to {actual_target}")
                 return
             else:
                 # Directory mode
                 target_path.mkdir(parents=True, exist_ok=True)
-
                 timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")[:19]
                 filename = f"{timestamp}_{placeholders['slug']}.beancount"
-                target_file = target_path / filename
+                actual_target = target_path / filename
 
-                with open(target_file, "w") as f:
+                with open(actual_target, "w") as f:
                     f.write(entry_str)
-                print(f"Transaction created in {target_file}")
+                print(f"Transaction created in {actual_target}")
                 return
 
-        with open(target_file, "a") as f:
+        with open(actual_target, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Transaction appended to {target_file}")
+        print(f"Transaction appended to {actual_target}")
 
 
 class MapService:
@@ -600,7 +648,7 @@ class AccountService:
                 )
         return sorted(accounts, key=lambda a: a.name)
 
-    def create_account(self, account: AccountModel) -> None:
+    def create_account(self, account: AccountModel, target_file: Path | None = None) -> None:
         """
         Create a new account by appending an Open directive.
         """
@@ -609,7 +657,6 @@ class AccountService:
         if account.name in existing:
             raise ValueError(f"Account '{account.name}' already exists.")
 
-        # Create Open directive
         open_dir = data.Open(
             meta=account.meta,
             date=account.open_date or date.today(),
@@ -620,26 +667,69 @@ class AccountService:
 
         entry_str = printer.format_entry(open_dir)
 
-        # Determine where to write.
         # Ideally, we should find where other accounts are defined, but that's complex.
         # Check for cli-config "new_account_file"
-        target_file = self.ledger_file
+        actual_target = target_file or self.ledger_file
         config_file = self.ledger_service.get_custom_config("new_account_file")
 
-        if config_file:
+        if not target_file and config_file:
             target_path = (self.ledger_file.parent / config_file).resolve()
             if target_path.exists() or target_path.parent.exists():
-                target_file = target_path
+                actual_target = target_path
 
-        with open(target_file, "a") as f:
+        with open(actual_target, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Account created in {target_file}")
+        print(f"Account created in {actual_target}")
+
+    def add_balance(self, balance: BalanceModel, target_file: Path | None = None) -> None:
+        """
+        Add a Balance directive to the ledger.
+        """
+        self.ledger_service.load()
+        existing = set(self.ledger_service.get_accounts())
+        if str(balance.account) not in existing:
+            raise ValueError(f"Account '{balance.account}' does not exist (no Open directive).")
+
+        core_balance = to_core_balance(balance)
+        entry_str = printer.format_entry(core_balance)
+
+        actual_target = target_file or self.ledger_file
+
+        with open(actual_target, "a") as f:
+            f.write("\n" + entry_str)
+        print(f"Balance check added to {actual_target}")
 
 
 class CommodityService:
     def __init__(self, ledger_file: Path):
         self.ledger_file = ledger_file
         self.ledger_service = LedgerService(ledger_file)
+
+    def list_commodities(self, asset_class: str | None = None) -> list[CommodityModel]:
+        self.ledger_service.load()
+        models = []
+        for e in self.ledger_service.entries:
+            if isinstance(e, data.Commodity):
+                meta = e.meta if e.meta else {}
+                if asset_class and meta.get("asset-class") != asset_class:
+                    continue
+                models.append(
+                    CommodityModel(
+                        currency=e.currency,
+                        date=e.date,
+                        meta=meta,
+                    )
+                )
+        return sorted(models, key=lambda m: m.currency)
+
+    def get_undeclared_commodities(self) -> list[UndeclaredCommodityModel]:
+        """
+        Return a list of currencies used in transactions but missing a `commodity` directive.
+        """
+        used = self.ledger_service.get_used_currencies()
+        declared = set(self.ledger_service.get_commodities())
+        undeclared = sorted(used - declared)
+        return [UndeclaredCommodityModel(currency=c) for c in undeclared]
 
     def create_commodity(
         self,
@@ -675,3 +765,67 @@ class CommodityService:
         with open(target_file, "a") as f:
             f.write("\n" + entry_str)
         print(f"Commodity created in {target_file}")
+
+
+class PriceService:
+    def __init__(self, ledger_service: LedgerService):
+        self.ledger_service = ledger_service
+
+    def get_price_gaps(self, tolerance_days: int = 7, rate: str = "daily") -> list[PriceGapModel]:
+        """
+        Identify periods of missing price data using beanprice logic for alignment.
+        rate: daily, weekday, weekly
+        """
+        from beancount.core import prices as bp_prices
+        from beanprice import price as bp_price
+
+        self.ledger_service.load()
+        entries = self.ledger_service.entries
+        price_map = self.ledger_service.get_price_map()
+
+        # "monthly" has no beanprice equivalent — weekly is the closest approximation
+        bp_rate = "weekly" if rate == "monthly" else rate
+
+        # Delegates job discovery to beanprice, which handles multi-currency and metadata prioritization
+        jobs = bp_price.get_price_jobs_up_to_date(
+            entries,
+            date_last=date.today(),
+            fill_gaps=True,
+            update_rate=bp_rate,
+        )
+
+        gaps: list[PriceGapModel] = []
+        for job in jobs:
+            base = job.base
+            quote = job.quote
+            job_date = job.date
+
+            if not base or not quote or not job_date:
+                continue
+
+            # Find the last available price before this gap to calculate days_missing
+            actual_date, _rate = bp_prices.get_price(price_map, (base, quote), job_date)
+
+            days_missing = (job_date - actual_date).days if actual_date else 999
+
+            if days_missing >= tolerance_days:
+                psstrs = [
+                    "{}({}{})".format(
+                        psource.module.__name__, "1/" if psource.invert else "", psource.symbol
+                    )
+                    for psource in job.sources
+                ]
+                source_spec = f"{quote}:{','.join(psstrs)}"
+                cmd = f"bean-price -d '{job_date}' -e '{source_spec}'"
+                gaps.append(
+                    PriceGapModel(
+                        currency=base,
+                        target_currency=quote,
+                        gap_start=job_date,
+                        last_available_date=actual_date,
+                        days_missing=days_missing,
+                        fetch_command=cmd,
+                    )
+                )
+
+        return gaps

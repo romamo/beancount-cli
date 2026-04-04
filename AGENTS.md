@@ -17,9 +17,11 @@ If you are executing shell commands to help a human analyze or modify their `mai
 ### Available Capabilities (High-Level)
 - **`account list/create`**: Create and list chart of accounts.
 - **`transaction list/add`**: Query and batch insert accounting transactions.
+- **`commodity list/create/check`**: Manage currency rules and commodities. Use `check` to find used currencies missing a declaration.
+- **`price check/fetch`**: Manage price data and discovery.
+   - `check`: Identify periods of missing price data for held assets. Supports `--rate (daily, weekday, weekly, monthly)`.
+   - `fetch`: Wrapper for `bean-price` to fetch latest quotes. Supports `--update`, `--dry-run`, `--verbose`, `--inactive`, and `--update-fill-gaps`.
 - **`report`**: Generate detailed mathematical rollups (`balance-sheet`, `trial-balance`, `holdings`, `audit`).
-- **`commodity`**: Manage currency rules.
-- **`price`**: Fetch remote price quotes for commodities.
 - **`format/tree`**: Maintain correct text indentation and view include trees.
 - **Single Item Retrieval**: Use `--format json` when you require nested, hierarchical data structures.
 - **Human Display**: The default format is `table`. Only use this if you are dumping the raw execution output directly to the user's terminal interface. 

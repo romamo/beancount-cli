@@ -132,23 +132,11 @@ def test_format_cmd(temp_beancount_file, monkeypatch):
     assert "Formatted" in out
 
 
-def test_price_cmd(temp_beancount_file, monkeypatch):
-    import subprocess
-
-    def mock_run(*args, **kwargs):
-        class MockResult:
-            stdout = "2024-01-01 price AAPL 150.00 USD"
-
-        return MockResult()
-
-    monkeypatch.setattr(subprocess, "run", mock_run)
-    code, out, err = run_cli("price", str(temp_beancount_file))
+def test_price_cmd(temp_beancount_file):
+    # `price` is now a subcommand group; calling it without a subcommand shows help
+    code, out, err = run_cli("price", "--help")
     assert code in (0, None)
-    assert "2024-01-01" in out
-
-    code, out, err = run_cli("price", str(temp_beancount_file), "--update")
-    assert code in (0, None)
-    assert "Appended" in out
+    assert "check" in out or "fetch" in out
 
 
 def test_missing_ledger_file(monkeypatch):
@@ -159,12 +147,9 @@ def test_missing_ledger_file(monkeypatch):
     if "BEANCOUNT_PATH" in os.environ:
         monkeypatch.delenv("BEANCOUNT_PATH")
 
-    # In typer migration, `check` with no explicit file tries "main.beancount".
-    # Since it doesn't exist, it raises a FileNotFoundError.
-    import pytest
-
-    with pytest.raises(FileNotFoundError):
-        run_cli("check", "doesnt_exist_file.beancount")
+    code, out, err = run_cli("check", "doesnt_exist_file.beancount")
+    assert code == 2  # EXIT_SYSTEM
+    assert "Traceback" not in err
 
 
 def test_report_holdings_help_hides_audit_only_flags():

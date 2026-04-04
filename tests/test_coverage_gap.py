@@ -49,8 +49,36 @@ def test_check_cmd_with_errors(temp_beancount_file):
     with open(temp_beancount_file, "a") as f:
         f.write("\n2022-01-01 INVALID_STATEMENT\n")
     code, out, err = _run_cli("check", str(temp_beancount_file))
-    assert code != 0
-    assert "Invalid" in out or "Invalid" in err or "syntax error" in out or "syntax error" in err
+    assert code == 1  # EXIT_VALIDATION, not system error
+    assert "Traceback" not in err
+
+
+def test_check_missing_file_exits_system(tmp_path):
+    code, out, err = _run_cli("check", str(tmp_path / "nope.beancount"))
+    assert code == 2  # EXIT_SYSTEM
+    assert "Traceback" not in err
+
+
+def test_check_missing_file_json(tmp_path):
+    code, out, err = _run_cli("check", "--format", "json", str(tmp_path / "nope.beancount"))
+    assert code == 2
+    payload = jsonlib.loads(err)
+    assert payload["exit_code"] == 2
+    assert payload["error_type"] == "FileNotFoundError"
+    assert "Traceback" not in err
+
+
+def test_check_validation_errors_json(temp_beancount_file):
+    with open(temp_beancount_file, "a") as f:
+        f.write("\n2022-01-01 INVALID_STATEMENT\n")
+    code, out, err = _run_cli("check", "--format", "json", str(temp_beancount_file))
+    assert code == 1
+    payload = jsonlib.loads(err)
+    assert payload["error"] is True
+    assert payload["error_type"] == "BeancountValidationError"
+    assert payload["exit_code"] == 1
+    assert isinstance(payload["errors"], list)
+    assert len(payload["errors"]) > 0
 
 
 def test_report_audit_json(temp_beancount_file):
