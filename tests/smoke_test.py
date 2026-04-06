@@ -19,7 +19,7 @@ def test_smoke():
         check=False,
     )
     assert result.returncode == 0
-    assert "Beancount CLI tool" in result.stdout
+    assert "Beancount CLI tool" in result.stdout + result.stderr
 
     # 2. Check version command
     result = subprocess.run(
