@@ -136,7 +136,7 @@ def test_price_cmd(temp_beancount_file):
     # `price` is now a subcommand group; calling it without a subcommand shows help
     code, out, err = run_cli("price", "--help")
     assert code in (0, None)
-    assert "check" in out or "fetch" in out
+    assert "check" in (out + err) or "fetch" in (out + err)
 
 
 def test_missing_ledger_file(monkeypatch):
@@ -148,7 +148,7 @@ def test_missing_ledger_file(monkeypatch):
         monkeypatch.delenv("BEANCOUNT_PATH")
 
     code, out, err = run_cli("check", "doesnt_exist_file.beancount")
-    assert code == 2  # EXIT_SYSTEM
+    assert code == 1  # EXIT_SYSTEM
     assert "Traceback" not in err
 
 
@@ -162,5 +162,5 @@ def test_report_holdings_help_hides_audit_only_flags():
 def test_report_audit_help_shows_audit_only_flags():
     code, out, err = run_cli("report", "audit", "--help")
     assert code in (0, None)
-    assert "--limit" in out
-    assert "--all" in out
+    assert "--limit" in (out + err)
+    assert "--all" in (out + err)

@@ -1,13 +1,14 @@
 import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from tempfile import gettempdir
 
 import agentyper as typer
 from beancount.core import data
+from beancount.core.data import sorted as bean_sorted
 from beancount.parser import printer
 from beanprice import price as bp_price
 
@@ -26,9 +27,6 @@ def price_check(
     tolerance: int = typer.Option(
         7, "--tolerance", "-t", help="Allowed delay in days before flagging a gap"
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Verbosity level (-v for INFO, -vv for DEBUG)"
-    ),
     rate: str = typer.Option(
         "daily", "--rate", "-r", help="Check frequency: daily, weekday, weekly, monthly"
     ),
@@ -38,7 +36,6 @@ def price_check(
     ledger_service = LedgerService(actual_file)
     price_service = PriceService(ledger_service)
 
-    _setup_logging(verbose)
     _warn_missing_price_meta(ledger_service, "Price history cannot be verified.")
 
     gaps = price_service.get_price_gaps(tolerance_days=tolerance, rate=rate)
@@ -62,11 +59,14 @@ def price_check(
         typer.output(gaps, title="Price Gaps")
 
 
-@app.command(name="fetch")
+@app.command(name="fetch", mutating=True)
 def price_fetch(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
+    ledger_files: list[Path] = typer.Argument(
+        [],
+        help="One or more beancount ledger files to merge before fetching prices",
+    ),
     file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
+        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file (legacy fallback)"
     ),
     update: bool = typer.Option(
         False, "--update", "-u", help="Fetch from last price forward and update ledger"
@@ -75,33 +75,57 @@ def price_fetch(
         False, "--inactive", "-i", help="Include commodities with no balance"
     ),
     fill_gaps: bool = typer.Option(False, "--fill-gaps", help="Fill gaps in price history"),
-    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Don't actually fetch, just print"),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Verbosity level (-v for INFO, -vv for DEBUG)"
-    ),
+    dry_run: bool = False,
 ):
-    """Fetch and update prices using bean-price library."""
-    actual_file = get_ledger_file(ledger_file or file)
-    error_console.print(f"Fetching prices for {actual_file}...")
+    """Fetch and update prices using bean-price library.
 
-    _setup_logging(verbose)
+    Accepts one or more beancount ledger files as positional arguments. When
+    multiple files are provided they are all loaded and their entries merged
+    before price jobs are computed. This lets you split commodities/prices
+    across separate files (e.g. a common registry and a portfolio ledger) while
+    still running a single fetch pass.
+
+    If no positional arguments are given the command falls back to --file / the
+    BEANCOUNT_FILE environment variable for backward compatibility.
+    """
+    # Resolve the list of ledger files to load.
+    if ledger_files:
+        files_to_load = ledger_files
+    else:
+        files_to_load = [get_ledger_file(file)]
+
+    label = ", ".join(str(f) for f in files_to_load)
+    error_console.print(f"Fetching prices for {label}...", highlight=False)
 
     try:
         cache_path = Path(gettempdir()) / "bean-price.cache"
         bp_price.setup_cache(str(cache_path), clear_cache=False)
 
-        ledger_service = LedgerService(actual_file)
-        ledger_service.load()
-        entries = ledger_service.entries
+        # Load and merge all ledger files
+        all_entries: list[data.Directive] = []
+        all_errors: list = []
+        primary_ledger_service: LedgerService | None = None
 
-        _warn_missing_price_meta(ledger_service, "Skipping fetch.")
+        for ledger_path in files_to_load:
+            svc = LedgerService(ledger_path)
+            svc.load()
+            all_entries.extend(svc.entries)
+            all_errors.extend(svc.errors)
+            if primary_ledger_service is None:
+                primary_ledger_service = svc
+
+        # Sort merged entries by date (beancount canonical order)
+        entries = bean_sorted(all_entries)
+
+        assert primary_ledger_service is not None  # always set — files_to_load is non-empty
+
+        _warn_missing_price_meta_entries(entries, "Skipping fetch.")
 
         if update or fill_gaps:
             jobs = bp_price.get_price_jobs_up_to_date(
                 entries,
-                date_last=datetime.now().date(),
+                date_last=datetime.now().date() + timedelta(days=1),
                 inactive=inactive,
-                fill_gaps=fill_gaps,
             )
         else:
             jobs = bp_price.get_price_jobs_at_date(entries, date=None, inactive=inactive)
@@ -121,11 +145,14 @@ def price_fetch(
         # This keeps the streaming output clean of duplicates already in the ledger
         existing_prices = {(e.date, e.currency) for e in entries if isinstance(e, data.Price)}
 
+        failed_jobs = []
+        redundant_count = 0
         try:
             with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
                 future_to_job = {executor.submit(bp_price.fetch_price, job): job for job in jobs}
 
                 for future in as_completed(future_to_job):
+                    job = future_to_job[future]
                     price_entry = future.result()
                     if price_entry:
                         price_entry = price_entry._replace(
@@ -139,6 +166,13 @@ def price_fetch(
                             existing_prices.add((price_entry.date, price_entry.currency))
                             print(printer.format_entry(price_entry), end="")
                             sys.stdout.flush()
+                        else:
+                            redundant_count += 1
+                            logging.debug(
+                                "Redundant: %s", printer.format_entry(price_entry).strip()
+                            )
+                    else:
+                        failed_jobs.append(job)
         except KeyboardInterrupt:
             error_console.print("\n[yellow]Interrupt received. Stopping fetch...[/yellow]")
 
@@ -153,18 +187,32 @@ def price_fetch(
 
             prices_output = "".join(printer.format_entry(p) for p in filtered_prices)
 
-            map_service = MapService(actual_file)
-            inc_tree = map_service.get_include_tree()
-            target_price_file = actual_file
+            # Resolve target price file.
+            # Strategy:
+            # 1. Look for a file named 'prices.beancount' in the argument list itself.
+            # 2. Look for a sibling named 'prices.beancount' relative to the primary ledger.
+            # 3. Search the include tree for a file with 'price' in the name.
+            # 4. Fallback to the primary ledger.
 
-            # Prioritize standard names
-            sibling_prices = actual_file.parent / "prices.beancount"
-            if sibling_prices.exists():
-                target_price_file = sibling_prices
-            else:
-                found = _find_price_file(inc_tree)
-                if found:
-                    target_price_file = found
+            target_price_file = None
+            for f in files_to_load:
+                if f.name == "prices.beancount":
+                    target_price_file = f
+                    break
+
+            if target_price_file is None:
+                primary_file = files_to_load[0]
+                sibling_prices = primary_file.parent / "prices.beancount"
+                if sibling_prices.exists():
+                    target_price_file = sibling_prices
+                else:
+                    map_service = MapService(primary_file)
+                    inc_tree = map_service.get_include_tree()
+                    found = _find_price_file(inc_tree)
+                    if found:
+                        target_price_file = found
+                    else:
+                        target_price_file = primary_file
 
             with open(target_price_file, "a") as f:
                 f.write(prices_output)
@@ -172,7 +220,21 @@ def price_fetch(
             error_console.print(
                 f"[green]Appended {len(filtered_prices)} new prices to {target_price_file.name}[/green]"
             )
-        elif not new_price_entries:
+
+        if redundant_count:
+            error_console.print(
+                f"[yellow]Ignored {redundant_count} fetched prices as they are already in the ledger.[/yellow]"
+            )
+
+        if failed_jobs:
+            failed_info = ", ".join(f"{j.currency} on {j.date}" for j in failed_jobs[:5])
+            if len(failed_jobs) > 5:
+                failed_info += f" (+{len(failed_jobs) - 5} more)"
+            error_console.print(
+                f"[yellow]Skipped {len(failed_jobs)} jobs with no data from source: {failed_info}[/yellow]"
+            )
+
+        if not new_price_entries and not failed_jobs and not redundant_count:
             error_console.print("[yellow]No new prices found.[/yellow]")
 
     except Exception as e:
@@ -195,44 +257,39 @@ def _find_price_file(tree: dict) -> Path | None:
 
 def _warn_missing_price_meta(ledger_service: LedgerService, context: str) -> None:
     """Warn about held commodities that lack 'price' metadata and cannot be priced."""
-    held = ledger_service.get_inventory(date.today())
-    op_currs = set(ledger_service.get_operating_currencies()) or {"USD"}
-    commodity_meta = {
-        e.currency: e.meta for e in ledger_service.entries if isinstance(e, data.Commodity)
+    _warn_missing_price_meta_entries(ledger_service.entries, context)
+
+
+def _warn_missing_price_meta_entries(entries: list[data.Directive], context: str) -> None:
+    """Warn about held commodities (from a merged entry list) that lack 'price' metadata."""
+    from beancount.core import convert
+    from beancount.core.inventory import Inventory
+
+    inv = Inventory()
+    today = date.today()
+    for e in entries:
+        if e.date > today:
+            break
+        if isinstance(e, data.Transaction):
+            for p in e.postings:
+                if p.account.startswith(("Assets", "Liabilities")):
+                    inv.add_position(p)
+
+    held = {
+        pos.units.currency
+        for pos in inv.reduce(convert.get_units)
+        if not pos.units.number.is_zero()
     }
+
+    # Extract operating currencies from options if possible
+    # In a merged entry list, we might have 'option' directives as Custom entries or similar?
+    # Actually, Beancount usually loads them into an options map.
+    # For now, we'll just check commodity metadata.
+
+    commodity_meta = {e.currency: e.meta for e in entries if isinstance(e, data.Commodity)}
     for curr in sorted(held):
-        if curr in op_currs:
-            continue
         meta = commodity_meta.get(curr, {})
         if not meta or "price" not in meta:
             error_console.print(
                 f"[red]Error: Commodity {curr} is held but has no 'price' metadata. {context}[/red]"
             )
-
-
-def _setup_logging(verbose: bool):
-    """Sets up logging levels based on verbosity count in sys.argv."""
-    # Manual count of 'v' flags in sys.argv to handle -v, -vv, etc.
-    count = 0
-    for arg in sys.argv:
-        if arg == "-v":
-            count += 1
-        elif arg.startswith("-") and not arg.startswith("--"):
-            # Handle combined flags like -uvv
-            count += arg.count("v")
-        elif arg == "--verbose":
-            count += 1
-
-    if count >= 2:
-        log_level = logging.DEBUG
-    elif count == 1 or verbose:
-        log_level = logging.INFO
-    else:
-        log_level = logging.WARNING
-
-    logging.basicConfig(level=log_level, format="%(levelname)-8s: %(message)s", force=True)
-
-    # Silence noisy loggers unless -vv is used
-    if count < 2:
-        for logger_name in ["yfinance", "urllib3", "requests", "diskcache"]:
-            logging.getLogger(logger_name).setLevel(logging.WARNING)

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `price fetch`: migrate from PyPI `beanprice` to `romamo/beanprice` fork.
+- `price fetch --update`: include today's date in the fetch window (`date_last` is exclusive, so now passes `today + 1`).
+
+### Added
+- `price fetch -vv`: log each redundant fetched price at DEBUG level so skipped prices are visible.
+
+## [0.2.9] - 2026-04-05
+
+### Fixed
+- Smoke test: check stderr as well as stdout when probing `--help` output, fixing false negatives in isolated environments.
+
 ## [0.2.8] - 2026-04-04
 
 ### Added

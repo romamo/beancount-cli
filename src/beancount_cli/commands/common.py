@@ -6,8 +6,13 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-console = Console()
-error_console = Console(stderr=True)
+# REQ-F-056: Handle agentyper width suppression (COLUMNS=0)
+_width = None
+if os.environ.get("COLUMNS") == "0":
+    _width = 100
+
+console = Console(width=_width)
+error_console = Console(stderr=True, width=_width)
 
 
 def read_json_input(json_data: str) -> str:

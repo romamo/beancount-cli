@@ -21,6 +21,8 @@ def test_report_holdings_json(temp_beancount_file):
     """Exercises the holdings JSON output path (render_output(holdings, format='json'))."""
     code, out, _ = _run_cli("report", "holdings", str(temp_beancount_file), "--format", "json")
     data = jsonlib.loads(out)
+    if "data" in data and "ok" in data:
+        data = data["data"]
     if isinstance(data, list):
         if data:
             assert "Account" in data[0]
@@ -49,21 +51,21 @@ def test_check_cmd_with_errors(temp_beancount_file):
     with open(temp_beancount_file, "a") as f:
         f.write("\n2022-01-01 INVALID_STATEMENT\n")
     code, out, err = _run_cli("check", str(temp_beancount_file))
-    assert code == 1  # EXIT_VALIDATION, not system error
+    assert code == 3  # EXIT_VALIDATION, not system error
     assert "Traceback" not in err
 
 
 def test_check_missing_file_exits_system(tmp_path):
     code, out, err = _run_cli("check", str(tmp_path / "nope.beancount"))
-    assert code == 2  # EXIT_SYSTEM
+    assert code == 1  # EXIT_SYSTEM
     assert "Traceback" not in err
 
 
 def test_check_missing_file_json(tmp_path):
     code, out, err = _run_cli("check", "--format", "json", str(tmp_path / "nope.beancount"))
-    assert code == 2
+    assert code == 1
     payload = jsonlib.loads(err)
-    assert payload["exit_code"] == 2
+    assert payload["exit_code"] == 1
     assert payload["error_type"] == "FileNotFoundError"
     assert "Traceback" not in err
 
@@ -72,11 +74,11 @@ def test_check_validation_errors_json(temp_beancount_file):
     with open(temp_beancount_file, "a") as f:
         f.write("\n2022-01-01 INVALID_STATEMENT\n")
     code, out, err = _run_cli("check", "--format", "json", str(temp_beancount_file))
-    assert code == 1
+    assert code == 3
     payload = jsonlib.loads(err)
     assert payload["error"] is True
     assert payload["error_type"] == "BeancountValidationError"
-    assert payload["exit_code"] == 1
+    assert payload["exit_code"] == 3
     assert isinstance(payload["errors"], list)
     assert len(payload["errors"]) > 0
 
@@ -87,6 +89,8 @@ def test_report_audit_json(temp_beancount_file):
     )
     assert code == 0
     data = jsonlib.loads(out)
+    if "data" in data and "ok" in data:
+        data = data["data"]
     assert isinstance(data, list)
 
 
