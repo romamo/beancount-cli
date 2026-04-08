@@ -1,7 +1,7 @@
 import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from tempfile import gettempdir
@@ -124,7 +124,7 @@ def price_fetch(
         if update or fill_gaps:
             jobs = bp_price.get_price_jobs_up_to_date(
                 entries,
-                date_last=datetime.now().date() + timedelta(days=1),
+                date_last=datetime.now().date(),
                 inactive=inactive,
             )
         else:
