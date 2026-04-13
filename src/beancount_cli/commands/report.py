@@ -175,10 +175,10 @@ def report_audit(
             sys.exit(typer.EXIT_VALIDATION)
 
     txs = tx_service.list_transactions(currency=audit_currency)
-    txs.sort(key=lambda x: x.date, reverse=True)
+    txs.sort(key=lambda x: (x.date, x.payee or "", x.narration))
 
     if not all_:
-        txs = txs[:limit]
+        txs = txs[-limit:]
 
     if _is_table_format():
         from rich.table import Table

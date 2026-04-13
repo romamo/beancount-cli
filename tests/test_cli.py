@@ -1,5 +1,6 @@
 import io
 import json
+import textwrap
 from unittest.mock import patch
 
 from beancount_cli.cli import main
@@ -110,10 +111,47 @@ def test_report_holdings(temp_beancount_file):
     assert "Holdings" in out
 
 
-def test_report_audit(temp_beancount_file):
-    code, out, err = run_cli("report", "audit", str(temp_beancount_file), "--currency", "USD")
+def test_report_audit(tmp_path):
+    path = tmp_path / "audit.beancount"
+    path.write_text(
+        textwrap.dedent(
+            """
+        option "operating_currency" "USD"
+        2020-01-01 open Assets:Cash USD
+        2020-01-01 open Expenses:Food USD
+        
+        2020-02-01 * "Store A" "Oldest"
+          Expenses:Food          100 USD
+          Assets:Cash           -100 USD
+
+        2020-02-15 * "Store B" "Middle"
+          Expenses:Food          200 USD
+          Assets:Cash           -200 USD
+
+        2020-03-01 * "Store C" "Newest"
+          Expenses:Food          300 USD
+          Assets:Cash           -300 USD
+    """
+        )
+    )
+    # Test all transactions (older to newest)
+    code, out, err = run_cli("report", "audit", str(path), "--currency", "USD", "--all")
     assert code in (0, None)
     assert "Audit Report: USD" in out
+    lines = [line for line in out.splitlines() if "Store" in line]
+    assert len(lines) == 6
+    assert "Store A" in lines[0]
+    assert "Store B" in lines[2]
+    assert "Store C" in lines[4]
+
+    # Test limit (should show LAST 2 transactions in chronological order: Middle -> Newest)
+    code, out, err = run_cli("report", "audit", str(path), "--currency", "USD", "--limit", "2")
+    assert code in (0, None)
+    lines = [line for line in out.splitlines() if "Store" in line]
+    assert len(lines) == 4
+    assert "Store B" in lines[0]
+    assert "Store C" in lines[2]
+    assert "Showing last 2 transactions" in out
 
 
 def test_tx_schema():
