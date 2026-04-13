@@ -28,6 +28,22 @@ def test_transaction_list(temp_beancount_file):
     assert "Employer" in out
 
 
+def test_transaction_list_fields(temp_beancount_file):
+    code, out, err = run_cli(
+        "transaction", "list", str(temp_beancount_file), "--format", "json", "--fields", "date,payee"
+    )
+    assert code in (0, None)
+    data = json.loads(out)
+    # Check that only date and payee are present (plus any standard agentyper wrapper)
+    # If agentyper wraps it in {"ok": true, "data": [...]}:
+    txs = data["data"]
+    if isinstance(txs, list):
+        for tx in txs:
+            assert set(tx.keys()) == {"date", "payee"}
+    else:
+        assert set(txs.keys()) == {"date", "payee"}
+
+
 def test_transaction_add_json(temp_beancount_file):
     payload = {
         "date": "2023-12-01",

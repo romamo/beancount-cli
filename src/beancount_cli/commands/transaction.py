@@ -21,6 +21,7 @@ def tx_list(
     payee: str | None = typer.Option(None, "--payee", "-p", help="Filter by payee regex"),
     tag: str | None = typer.Option(None, "--tag", "-t", help="Filter by tag"),
     where: str | None = typer.Option(None, "--where", "-w", help="Custom BQL where clause"),
+    fields: str | None = typer.Option(None, "--fields", help="Comma-separated fields to include in JSON output"),
 ):
     """List transactions matching filters."""
     actual_file = get_ledger_file(ledger_file or file)
@@ -36,7 +37,11 @@ def tx_list(
         typer.output(data, title=f"Transactions ({len(txs)})")
     else:
         # Let agentyper format direct Pydantic models to JSON/CSV naturally!
-        typer.output([tx.model_dump(mode="json") for tx in txs], title=f"Transactions ({len(txs)})")
+        results = [tx.model_dump(mode="json") for tx in txs]
+        if fields:
+            fields_set = set(fields.split(","))
+            results = [{k: v for k, v in r.items() if k in fields_set} for r in results]
+        typer.output(results, title=f"Transactions ({len(txs)})")
 
 
 @app.command(name="add")
