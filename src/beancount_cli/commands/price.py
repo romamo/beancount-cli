@@ -75,6 +75,9 @@ def price_fetch(
         False, "--inactive", "-i", help="Include commodities with no balance"
     ),
     fill_gaps: bool = typer.Option(False, "--fill-gaps", help="Fill gaps in price history"),
+    held: bool = typer.Option(
+        False, "--held", help="Include commodities with non-zero balance in any account"
+    ),
     dry_run: bool = False,
 ):
     """Fetch and update prices using bean-price library.
@@ -126,9 +129,12 @@ def price_fetch(
                 entries,
                 date_last=datetime.now().date(),
                 inactive=inactive,
+                held=held,
             )
         else:
-            jobs = bp_price.get_price_jobs_at_date(entries, date=None, inactive=inactive)
+            jobs = bp_price.get_price_jobs_at_date(
+                entries, date=None, inactive=inactive, held=held
+            )
 
         if not jobs:
             error_console.print("[yellow]No price jobs to execute.[/yellow]")

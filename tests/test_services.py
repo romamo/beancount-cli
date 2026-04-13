@@ -174,3 +174,18 @@ def test_holdings_in_target_currency_equal_position_amount(tmp_path):
         )
     assert holdings["totals"]["EUR"]["market"] == expected
     assert holdings["totals"]["EUR"]["cost"] == expected
+
+def test_price_service_get_price_gaps(temp_beancount_file):
+    from beancount_cli.services import PriceService, LedgerService
+    from unittest.mock import patch
+    
+    with patch("beanprice.price.get_price_jobs_up_to_date") as mock_get_jobs:
+        mock_get_jobs.return_value = []
+        ledger = LedgerService(temp_beancount_file)
+        svc = PriceService(ledger)
+        # Using a default call to get_price_gaps to see if it defaults correctly
+        svc.get_price_gaps()
+        mock_get_jobs.assert_called_once()
+        # Verify that fill_gaps is not among the kwargs anymore (since it was removed)
+        assert "fill_gaps" not in mock_get_jobs.call_args[1]
+

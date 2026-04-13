@@ -790,7 +790,6 @@ class PriceService:
         jobs = bp_price.get_price_jobs_up_to_date(
             entries,
             date_last=date.today(),
-            fill_gaps=True,
             update_rate=bp_rate,
         )
 
