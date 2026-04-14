@@ -219,20 +219,3 @@ def test_report_audit_help_shows_audit_only_flags():
     assert "--limit" in (out + err)
     assert "--all" in (out + err)
 
-def test_price_fetch_held(temp_beancount_file):
-    with patch("beancount_cli.commands.price.bp_price.get_price_jobs_at_date") as mock_get_jobs:
-        mock_get_jobs.return_value = []
-        code, out, err = run_cli("price", "fetch", "--held", str(temp_beancount_file))
-        assert code in (0, None)
-        mock_get_jobs.assert_called_once()
-        assert mock_get_jobs.call_args[1].get("held") is True
-
-def test_price_fetch_update(temp_beancount_file):
-    with patch("beancount_cli.commands.price.bp_price.get_price_jobs_up_to_date") as mock_get_jobs:
-        mock_get_jobs.return_value = []
-        code, out, err = run_cli("price", "fetch", "--update", str(temp_beancount_file))
-        assert code in (0, None)
-        mock_get_jobs.assert_called_once()
-        # Verify that held is passed as False by default
-        assert mock_get_jobs.call_args[1].get("held") is False
-
