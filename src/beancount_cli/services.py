@@ -14,6 +14,7 @@ from beancount_cli.models import (
     BalanceModel,
     CommodityModel,
     CurrencyCode,
+    PriceAnomalyModel,
     PriceGapModel,
     TransactionModel,
     UndeclaredCommodityModel,
@@ -828,3 +829,43 @@ class PriceService:
                 )
 
         return gaps
+
+    def get_price_anomalies(
+        self, threshold: Decimal = Decimal("1.0"), max_days: int = 7
+    ) -> list[PriceAnomalyModel]:
+        """
+        Identify sudden price jumps or drops.
+        threshold: 1.0 means 100% change (price doubled or dropped to zero).
+        max_days: Only compare points that are at most this many days apart.
+        """
+        self.ledger_service.load()
+        price_map = self.ledger_service.get_price_map()
+
+        anomalies = []
+        for (base, quote), points in price_map.items():
+            # points is a list of (date, price) sorted by date
+            for i in range(len(points) - 1):
+                curr_date, curr_price = points[i]
+                next_date, next_price = points[i + 1]
+
+                if (next_date - curr_date).days > max_days:
+                    continue
+
+                if curr_price == 0:
+                    continue
+
+                change = abs(next_price - curr_price) / curr_price
+                if change >= threshold:
+                    anomalies.append(
+                        PriceAnomalyModel(
+                            currency=base,
+                            target_currency=quote,
+                            date=curr_date,
+                            next_date=next_date,
+                            price=curr_price,
+                            next_price=next_price,
+                            change_pct=change * 100,
+                        )
+                    )
+
+        return sorted(anomalies, key=lambda x: (x.currency, x.date))

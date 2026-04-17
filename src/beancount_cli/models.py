@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import datetime
 import re
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Any
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 
 def validate_account_name(v: Any) -> str:
@@ -127,3 +129,14 @@ class PriceGapModel(BaseModel):
     last_available_date: datetime.date | None = None
     days_missing: int
     fetch_command: str | None = None
+
+class PriceAnomalyModel(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    currency: CurrencyCode.Input
+    target_currency: CurrencyCode.Input | None = None
+    date: datetime.date
+    next_date: datetime.date
+    price: Decimal
+    next_price: Decimal
+    change_pct: Decimal

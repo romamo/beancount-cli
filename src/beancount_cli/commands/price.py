@@ -59,6 +59,49 @@ def price_check(
         typer.output(gaps, title="Price Gaps")
 
 
+@app.command(name="check-anomalies")
+def price_check_anomalies(
+    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
+    file: Path | None = typer.Option(
+        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
+    ),
+    threshold: float = typer.Option(
+        1.0, "--threshold", "-t", help="Minimum change percentage as decimal (1.0 = 100%)"
+    ),
+    max_days: int = typer.Option(
+        7, "--max-days", "-d", help="Maximum days between consecutive prices"
+    ),
+):
+    """Check for sudden price jumps or drops in the ledger."""
+    actual_file = get_ledger_file(ledger_file or file)
+    ledger_service = LedgerService(actual_file)
+    price_service = PriceService(ledger_service)
+
+    anomalies = price_service.get_price_anomalies(
+        threshold=Decimal(str(threshold)), max_days=max_days
+    )
+
+    if _is_table_format():
+        if not anomalies:
+            typer.echo("No price anomalies found.")
+        else:
+            anomalies_data = [
+                {
+                    "Currency": a.currency,
+                    "Target": a.target_currency,
+                    "Date": str(a.date),
+                    "Next Date": str(a.next_date),
+                    "Price": f"{a.price:,.4f}",
+                    "Next Price": f"{a.next_price:,.4f}",
+                    "Change %": f"{a.change_pct:,.1f}%",
+                }
+                for a in anomalies
+            ]
+            typer.output(anomalies_data, title=f"Price Anomalies ({len(anomalies)})")
+    else:
+        typer.output(anomalies, title="Price Anomalies")
+
+
 @app.command(name="fetch", mutating=True)
 def price_fetch(
     ledger_files: list[Path] = typer.Argument(
