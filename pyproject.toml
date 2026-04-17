@@ -15,7 +15,7 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "beanprice2>=2.1.0",
     "pydantic-settings>=2.0.0",
-    "agentyper==0.1.8",
+    "agentyper==0.1.12",
 ]
 keywords = ["beancount", "cli", "accounting", "automation", "agent"]
 classifiers = [
@@ -85,10 +85,4 @@ extend-immutable-calls = ["agentyper.Argument", "agentyper.Option", "typer.Argum
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
-
-
-[tool.uv.sources]
-beanprice2 = { path = "../beanprice", editable = true }
-
-
 

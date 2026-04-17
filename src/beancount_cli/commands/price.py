@@ -166,14 +166,10 @@ def price_fetch(
 
         if update or fill_gaps:
             jobs = bp_price.get_price_jobs_up_to_date(
-                entries,
-                date_last=datetime.now().date(),
-                inactive=inactive
+                entries, date_last=datetime.now().date(), inactive=inactive
             )
         else:
-            jobs = bp_price.get_price_jobs_at_date(
-                entries, date=None, inactive=inactive
-            )
+            jobs = bp_price.get_price_jobs_at_date(entries, date=None, inactive=inactive)
 
         if not jobs:
             error_console.print("[yellow]No price jobs to execute.[/yellow]")

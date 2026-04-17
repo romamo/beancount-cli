@@ -21,7 +21,9 @@ def tx_list(
     payee: str | None = typer.Option(None, "--payee", "-p", help="Filter by payee regex"),
     tag: str | None = typer.Option(None, "--tag", "-t", help="Filter by tag"),
     where: str | None = typer.Option(None, "--where", "-w", help="Custom BQL where clause"),
-    fields: str | None = typer.Option(None, "--fields", help="Comma-separated fields to include in JSON output"),
+    fields: str | None = typer.Option(
+        None, "--fields", help="Comma-separated fields to include in JSON output"
+    ),
 ):
     """List transactions matching filters."""
     actual_file = get_ledger_file(ledger_file or file)

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.13] - 2026-04-17
+
+### Added
+- `price check`: detect anomalous pricing situations in addition to missing price gaps.
+- `transaction list --fields`: limit JSON output to a selected comma-separated subset of fields.
+
+### Changed
+- Upgraded `agentyper` to `0.1.12`.
+
+### Fixed
+- `report audit`: sort entries chronologically from oldest to newest.
+- `price fetch`: remove the non-functional `--held` behavior.
+
 ## [0.2.12] - 2026-04-08
 
 ### Fixed

@@ -130,6 +130,7 @@ class PriceGapModel(BaseModel):
     days_missing: int
     fetch_command: str | None = None
 
+
 class PriceAnomalyModel(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

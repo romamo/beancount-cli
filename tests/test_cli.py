@@ -31,7 +31,13 @@ def test_transaction_list(temp_beancount_file):
 
 def test_transaction_list_fields(temp_beancount_file):
     code, out, err = run_cli(
-        "transaction", "list", str(temp_beancount_file), "--format", "json", "--fields", "date,payee"
+        "transaction",
+        "list",
+        str(temp_beancount_file),
+        "--format",
+        "json",
+        "--fields",
+        "date,payee",
     )
     assert code in (0, None)
     data = json.loads(out)
@@ -218,4 +224,3 @@ def test_report_audit_help_shows_audit_only_flags():
     assert code in (0, None)
     assert "--limit" in (out + err)
     assert "--all" in (out + err)
-
