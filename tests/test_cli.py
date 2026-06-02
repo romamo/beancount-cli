@@ -153,7 +153,9 @@ def test_report_audit(tmp_path):
     assert "Store C" in lines[4]
 
     # Test limit (should show LAST 2 transactions in chronological order: Middle -> Newest)
-    code, out, err = run_cli("report", "audit", "--file", str(path), "--currency", "USD", "--limit", "2")
+    code, out, err = run_cli(
+        "report", "audit", "--file", str(path), "--currency", "USD", "--limit", "2"
+    )
     assert code in (0, None)
     lines = [line for line in out.splitlines() if "Store" in line]
     assert len(lines) == 4

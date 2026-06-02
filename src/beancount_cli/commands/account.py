@@ -168,10 +168,20 @@ def account_pad_balance(
         data_input = json.loads(read_json_input(json_data))
         model = PadBalanceModel(**data_input)
     else:
-        missing = [f for f, v in [("--account", account), ("--amount", amount),
-                                   ("--currency", currency), ("--pad-account", pad_account)] if not v]
+        missing = [
+            f
+            for f, v in [
+                ("--account", account),
+                ("--amount", amount),
+                ("--currency", currency),
+                ("--pad-account", pad_account),
+            ]
+            if not v
+        ]
         if missing:
-            console.print(f"[red]Error: {', '.join(missing)} required when not using --input.[/red]")
+            console.print(
+                f"[red]Error: {', '.join(missing)} required when not using --input.[/red]"
+            )
             sys.exit(typer.EXIT_VALIDATION)
 
         b_date = date.fromisoformat(balance_date) if balance_date else date.today()

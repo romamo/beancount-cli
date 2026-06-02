@@ -19,7 +19,9 @@ def _run_cli(*args):
 
 def test_report_holdings_json(temp_beancount_file):
     """Exercises the holdings JSON output path (render_output(holdings, format='json'))."""
-    code, out, _ = _run_cli("report", "holdings", "--file", str(temp_beancount_file), "--format", "json")
+    code, out, _ = _run_cli(
+        "report", "holdings", "--file", str(temp_beancount_file), "--format", "json"
+    )
     data = jsonlib.loads(out)
     if "data" in data and "ok" in data:
         data = data["data"]
@@ -32,7 +34,9 @@ def test_report_holdings_json(temp_beancount_file):
 
 def test_tx_list_json_format(temp_beancount_file):
     """Exercises the JSON format path in tx_list_cmd."""
-    code, out, _ = _run_cli("transaction", "list", "--file", str(temp_beancount_file), "--format", "json")
+    code, out, _ = _run_cli(
+        "transaction", "list", "--file", str(temp_beancount_file), "--format", "json"
+    )
     data = jsonlib.loads(out)
     assert isinstance(data, (list, dict))
 
@@ -42,7 +46,9 @@ def test_account_create_json_batch(temp_beancount_file):
     payload = jsonlib.dumps(
         [{"name": "Assets:Savings2", "open_date": "2024-01-01", "currencies": ["USD"]}]
     )
-    code, out, err = _run_cli("account", "create", "--file", str(temp_beancount_file), "--input", payload)
+    code, out, err = _run_cli(
+        "account", "create", "--file", str(temp_beancount_file), "--input", payload
+    )
     assert code in (0, None)
 
 
@@ -85,7 +91,14 @@ def test_check_validation_errors_json(temp_beancount_file):
 
 def test_report_audit_json(temp_beancount_file):
     code, out, err = _run_cli(
-        "report", "audit", "--file", str(temp_beancount_file), "--currency", "USD", "--format", "json"
+        "report",
+        "audit",
+        "--file",
+        str(temp_beancount_file),
+        "--currency",
+        "USD",
+        "--format",
+        "json",
     )
     assert code == 0
     data = jsonlib.loads(out)

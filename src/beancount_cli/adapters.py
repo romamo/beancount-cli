@@ -138,4 +138,3 @@ def to_core_pad(model: PadBalanceModel) -> tuple[data.Pad, data.Balance]:
         tolerance=None,
     )
     return pad, balance
-

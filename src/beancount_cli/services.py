@@ -9,7 +9,12 @@ from beancount import loader
 from beancount.core import data
 from beancount.parser import printer
 
-from beancount_cli.adapters import from_core_transaction, to_core_balance, to_core_pad, to_core_transaction
+from beancount_cli.adapters import (
+    from_core_transaction,
+    to_core_balance,
+    to_core_pad,
+    to_core_transaction,
+)
 from beancount_cli.models import (
     AccountModel,
     BalanceModel,
@@ -710,9 +715,7 @@ class AccountService:
             f.write("\n" + entry_str)
         print(f"Balance check added to {actual_target}")
 
-    def add_pad_balance(
-        self, model: PadBalanceModel, target_file: Path | None = None
-    ) -> None:
+    def add_pad_balance(self, model: PadBalanceModel, target_file: Path | None = None) -> None:
         """
         Append a Pad + Balance directive pair to the ledger.
 
@@ -724,13 +727,13 @@ class AccountService:
         existing = set(self.ledger_service.get_accounts())
 
         if str(model.account) not in existing:
-            raise ValueError(
-                f"Account '{model.account}' does not exist (no Open directive)."
-            )
+            raise ValueError(f"Account '{model.account}' does not exist (no Open directive).")
         if str(model.pad_account) not in existing:
             raise ValueError(
                 f"Pad account '{model.pad_account}' does not exist (no Open directive). "
-                "Create it first with: uv run bean account create --name '" + str(model.pad_account) + "'"
+                "Create it first with: uv run bean account create --name '"
+                + str(model.pad_account)
+                + "'"
             )
 
         core_pad, core_balance = to_core_pad(model)
@@ -850,7 +853,7 @@ class CommodityService:
         for c in to_overwrite:
             currency = str(c.currency)
             new_block = self._format_commodity_block(c)
-            pattern = rf'^\d{{4}}-\d{{2}}-\d{{2}}\s+commodity\s+{re.escape(currency)}\b[^\n]*(?:\n[ \t][^\n]*)*'
+            pattern = rf"^\d{{4}}-\d{{2}}-\d{{2}}\s+commodity\s+{re.escape(currency)}\b[^\n]*(?:\n[ \t][^\n]*)*"
             file_text = re.sub(pattern, new_block.rstrip("\n"), file_text, flags=re.MULTILINE)
 
         for c in to_add:

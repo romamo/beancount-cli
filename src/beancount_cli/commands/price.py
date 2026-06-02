@@ -312,17 +312,13 @@ def _get_cash_currency_jobs(
     """
     raw_lifetimes = bean_lifetimes.get_commodity_lifetimes(entries)
     cash_bases = {
-        base
-        for (base, cost), intervals in raw_lifetimes.items()
-        if cost is None and intervals
+        base for (base, cost), intervals in raw_lifetimes.items() if cost is None and intervals
     }
     if not cash_bases:
         return []
 
     declared_triples = bp_price.find_currencies_declared(entries, date_last)
-    cash_pairs = {
-        (base, quote) for base, quote, _ in declared_triples if base in cash_bases
-    }
+    cash_pairs = {(base, quote) for base, quote, _ in declared_triples if base in cash_bases}
     if not cash_pairs:
         return []
 

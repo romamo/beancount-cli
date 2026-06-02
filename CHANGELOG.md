@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.14] - 2026-06-02
+
+### Added
+- `account pad-balance`: insert a `pad` + `balance` directive pair directly into the ledger.
+
+### Changed
+- `--stdin` flag renamed to `--input` across all commands that read from standard input.
+
 ## [0.2.13] - 2026-04-17
 
 ### Added

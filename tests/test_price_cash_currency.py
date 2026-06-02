@@ -5,6 +5,7 @@ held as cash because get_commodity_lifetimes records holdings as (base, None)
 while currency_map uses (base, quote). _get_cash_currency_jobs detects and
 fills this gap.
 """
+
 import textwrap
 from datetime import date
 
@@ -41,7 +42,9 @@ def cash_cad_entries():
 
 def test_cash_currency_gets_jobs(cash_cad_entries):
     date_last = date(2020, 3, 1)
-    inactive_jobs = _resolve_price_jobs(cash_cad_entries, date_last, True, update=True, fill_gaps=False)
+    inactive_jobs = _resolve_price_jobs(
+        cash_cad_entries, date_last, True, update=True, fill_gaps=False
+    )
     jobs = _get_cash_currency_jobs(cash_cad_entries, date_last, inactive_jobs)
     pairs = {(j.base, j.quote) for j in jobs}
     assert ("CAD", "USD") in pairs
@@ -51,7 +54,9 @@ def test_cash_currency_jobs_respect_existing_price(cash_cad_entries):
     # With --update and an existing price on 2020-02-01, no job should be generated
     # for date_last=2020-02-01 itself (already up-to-date).
     date_last = date(2020, 2, 1)
-    inactive_jobs = _resolve_price_jobs(cash_cad_entries, date_last, True, update=True, fill_gaps=False)
+    inactive_jobs = _resolve_price_jobs(
+        cash_cad_entries, date_last, True, update=True, fill_gaps=False
+    )
     jobs = _get_cash_currency_jobs(cash_cad_entries, date_last, inactive_jobs)
     # date_last equals the existing price date, so beanprice considers it up-to-date.
     cad_jobs = [j for j in jobs if j.base == "CAD" and j.quote == "USD"]
@@ -108,7 +113,9 @@ def test_no_cash_currencies_returns_empty():
 def test_at_date_path(cash_cad_entries):
     """The non-update (at_date) path also returns jobs for cash currencies."""
     date_last = date(2020, 3, 1)
-    inactive_jobs = _resolve_price_jobs(cash_cad_entries, date_last, True, update=False, fill_gaps=False)
+    inactive_jobs = _resolve_price_jobs(
+        cash_cad_entries, date_last, True, update=False, fill_gaps=False
+    )
     jobs = _get_cash_currency_jobs(cash_cad_entries, date_last, inactive_jobs)
     pairs = {(j.base, j.quote) for j in jobs}
     assert ("CAD", "USD") in pairs

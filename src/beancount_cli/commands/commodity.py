@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 
 import agentyper as typer
-from beancount.parser import parser as bp_parser
 from beancount.core import data
+from beancount.parser import parser as bp_parser
 
 from beancount_cli.commands.common import (
     _is_table_format,
