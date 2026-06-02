@@ -13,7 +13,6 @@ app = typer.Agentyper(help="Manage transactions.")
 
 @app.command(name="list")
 def tx_list(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
@@ -26,7 +25,7 @@ def tx_list(
     ),
 ):
     """List transactions matching filters."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = TransactionService(actual_file)
     txs = service.list_transactions(
         account_regex=account, payee_regex=payee, tag=tag, bql_where=where
@@ -48,19 +47,18 @@ def tx_list(
 
 @app.command(name="add")
 def tx_add(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
     json_data: str = typer.Option(
-        ..., "--json", "-j", help="JSON string data (or '-' to read from STDIN)"
+        ..., "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
     ),
     draft: bool = typer.Option(False, "--draft", help="Mark as pending (!)"),
     print_only: bool = typer.Option(False, "--print", help="Print only, do not write"),
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
 ):
     """Add a new transaction."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = TransactionService(actual_file)
 
     data = json.loads(read_json_input(json_data))

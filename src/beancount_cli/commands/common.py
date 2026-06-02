@@ -15,6 +15,30 @@ console = Console(width=_width)
 error_console = Console(stderr=True, width=_width)
 
 
+_STDIN_MAX_BYTES = 65_536
+
+
+def read_stdin() -> str:
+    """Read text from stdin, guarding against TTY deadlock and pipe-buffer overflow (§50, §61)."""
+    import agentyper as typer
+
+    if sys.stdin.isatty():
+        error_console.print(
+            "[red]Error: stdin is a TTY — pipe input or use --input-file PATH.[/red]"
+        )
+        sys.exit(typer.EXIT_VALIDATION)
+
+    chunk = sys.stdin.buffer.read(_STDIN_MAX_BYTES + 1)
+    if len(chunk) > _STDIN_MAX_BYTES:
+        error_console.print(
+            f"[red]Error: stdin exceeds {_STDIN_MAX_BYTES // 1024} KB limit."
+            " Use --input-file PATH for large payloads.[/red]"
+        )
+        sys.exit(typer.EXIT_VALIDATION)
+
+    return chunk.decode()
+
+
 def read_json_input(json_data: str) -> str:
     """Read JSON from a string or from STDIN when json_data is '-'."""
     if json_data == "-":

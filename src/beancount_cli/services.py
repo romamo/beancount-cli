@@ -1,3 +1,4 @@
+import re
 import sys
 from datetime import date
 from decimal import Decimal
@@ -8,12 +9,14 @@ from beancount import loader
 from beancount.core import data
 from beancount.parser import printer
 
-from beancount_cli.adapters import from_core_transaction, to_core_balance, to_core_transaction
+from beancount_cli.adapters import from_core_transaction, to_core_balance, to_core_pad, to_core_transaction
 from beancount_cli.models import (
     AccountModel,
     BalanceModel,
+    CommodityImportResult,
     CommodityModel,
     CurrencyCode,
+    PadBalanceModel,
     PriceAnomalyModel,
     PriceGapModel,
     TransactionModel,
@@ -107,12 +110,12 @@ class LedgerService:
 
     def get_custom_config(self, key: str) -> str | None:
         """
-        Extract config from 'custom "cli-config" "key" "value"' directives.
+        Extract config from 'custom "ledger" "key" "value"' directives.
         """
         if not self._loaded:
             self.load()
         for e in reversed(self.entries):
-            if isinstance(e, data.Custom) and e.type == "cli-config":
+            if isinstance(e, data.Custom) and e.type == "ledger":
                 if len(e.values) < 2:
                     continue
 
@@ -129,6 +132,13 @@ class LedgerService:
                 if val_key == key:
                     return val_value
         return None
+
+    def get_commodities_file(self) -> Path | None:
+        """Return the resolved path from `custom "ledger" "commodities_file" "..."` in the ledger."""
+        value = self.get_custom_config("commodities_file")
+        if not value:
+            return None
+        return (self.ledger_file.parent / value).resolve()
 
 
 class ValidationService:
@@ -669,7 +679,7 @@ class AccountService:
         entry_str = printer.format_entry(open_dir)
 
         # Ideally, we should find where other accounts are defined, but that's complex.
-        # Check for cli-config "new_account_file"
+        # Check for ledger "new_account_file"
         actual_target = target_file or self.ledger_file
         config_file = self.ledger_service.get_custom_config("new_account_file")
 
@@ -699,6 +709,41 @@ class AccountService:
         with open(actual_target, "a") as f:
             f.write("\n" + entry_str)
         print(f"Balance check added to {actual_target}")
+
+    def add_pad_balance(
+        self, model: PadBalanceModel, target_file: Path | None = None
+    ) -> None:
+        """
+        Append a Pad + Balance directive pair to the ledger.
+
+        Beancount will automatically compute the adjustment amount and insert a
+        synthetic transaction on the pad date that brings `account` to `amount`
+        by the balance date.  The difference is booked against `pad_account`.
+        """
+        self.ledger_service.load()
+        existing = set(self.ledger_service.get_accounts())
+
+        if str(model.account) not in existing:
+            raise ValueError(
+                f"Account '{model.account}' does not exist (no Open directive)."
+            )
+        if str(model.pad_account) not in existing:
+            raise ValueError(
+                f"Pad account '{model.pad_account}' does not exist (no Open directive). "
+                "Create it first with: uv run bean account create --name '" + str(model.pad_account) + "'"
+            )
+
+        core_pad, core_balance = to_core_pad(model)
+        pad_str = printer.format_entry(core_pad)
+        balance_str = printer.format_entry(core_balance)
+
+        actual_target = target_file or self.ledger_file
+        with open(actual_target, "a") as f:
+            f.write("\n" + pad_str)
+            f.write("\n" + balance_str)
+        print(
+            f"Pad ({core_pad.date}) + Balance ({core_balance.date}) directives added to {actual_target}"
+        )
 
 
 class CommodityService:
@@ -766,6 +811,59 @@ class CommodityService:
         with open(target_file, "a") as f:
             f.write("\n" + entry_str)
         print(f"Commodity created in {target_file}")
+
+    def import_commodities(
+        self,
+        commodities: list[CommodityModel],
+        output_file: Path | None = None,
+        overwrite: bool = False,
+        dry_run: bool = False,
+    ) -> tuple[list[CommodityImportResult], Path | None]:
+        self.ledger_service.load()
+        commodities_file = output_file or self.ledger_service.get_commodities_file()
+        if commodities_file is not None and not commodities_file.exists():
+            raise FileNotFoundError(f"commodities_file not found: {commodities_file}")
+
+        existing = set(self.ledger_service.get_commodities())
+        results: list[CommodityImportResult] = []
+
+        to_add: list[CommodityModel] = []
+        to_overwrite: list[CommodityModel] = []
+
+        for c in commodities:
+            currency = str(c.currency)
+            if currency in existing:
+                if overwrite:
+                    to_overwrite.append(c)
+                    results.append(CommodityImportResult(currency=currency, action="overwritten"))
+                else:
+                    results.append(CommodityImportResult(currency=currency, action="skipped"))
+            else:
+                to_add.append(c)
+                results.append(CommodityImportResult(currency=currency, action="added"))
+
+        if dry_run or commodities_file is None:
+            return results, commodities_file
+
+        file_text = commodities_file.read_text()
+
+        for c in to_overwrite:
+            currency = str(c.currency)
+            new_block = self._format_commodity_block(c)
+            pattern = rf'^\d{{4}}-\d{{2}}-\d{{2}}\s+commodity\s+{re.escape(currency)}\b[^\n]*(?:\n[ \t][^\n]*)*'
+            file_text = re.sub(pattern, new_block.rstrip("\n"), file_text, flags=re.MULTILINE)
+
+        for c in to_add:
+            file_text += "\n" + self._format_commodity_block(c)
+
+        commodities_file.write_text(file_text)
+
+        return results, commodities_file
+
+    def _format_commodity_block(self, c: CommodityModel) -> str:
+        meta = {k: v for k, v in c.meta.items() if k not in ("filename", "lineno")}
+        comm_dir = data.Commodity(meta=meta, date=c.date or date.today(), currency=str(c.currency))
+        return printer.format_entry(comm_dir)
 
 
 class PriceService:

@@ -81,7 +81,7 @@ def test_add_transaction_directory_mode(tmp_path):
         'option "operating_currency" "USD"\n'
         "2020-01-01 open Assets:Cash USD\n"
         "2020-01-01 open Expenses:Food USD\n"
-        f'2020-01-01 custom "cli-config" "new_transaction_file" "{tx_dir.name}"'
+        f'2020-01-01 custom "ledger" "new_transaction_file" "{tx_dir.name}"'
     )
 
     service = TransactionService(ledger_file)

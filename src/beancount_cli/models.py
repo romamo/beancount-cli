@@ -21,7 +21,7 @@ def validate_currency_code(v: Any) -> str:
     """Validation logic for CurrencyCode."""
     if not isinstance(v, str):
         raise TypeError("string required")
-    if not re.match(r"^[A-Z][A-Z0-9\'\.\_\-]{0,22}[A-Z0-9]$", v):
+    if not re.match(r"^[A-Z][A-Z0-9\'\.\_\-]{0,22}[A-Z0-9]?$", v):
         raise ValueError(f"Invalid currency code format: {v}")
     return v
 
@@ -112,6 +112,24 @@ class BalanceModel(BaseModel):
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
+class PadBalanceModel(BaseModel):
+    """Combines a Pad directive with a Balance assertion.
+
+    Beancount will automatically insert a synthetic transaction on `pad_date`
+    to bring `account` to `amount` as of `balance_date`.
+    The difference is booked to `pad_account` (typically Expenses:Other or
+    Equity:Opening-Balances).
+    """
+
+    balance_date: datetime.date
+    account: AccountName.Input
+    amount: AmountModel
+    pad_account: AccountName.Input
+    pad_date: datetime.date | None = None
+    """Date for the pad directive. Defaults to balance_date minus one day."""
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
 class CommodityModel(BaseModel):
     currency: CurrencyCode.Input
     date: datetime.date | None = None
@@ -120,6 +138,11 @@ class CommodityModel(BaseModel):
 
 class UndeclaredCommodityModel(BaseModel):
     currency: CurrencyCode.Input
+
+
+class CommodityImportResult(BaseModel):
+    currency: str
+    action: str  # "added" | "overwritten" | "skipped"
 
 
 class PriceGapModel(BaseModel):

@@ -24,7 +24,7 @@ def test_check_command(temp_beancount_file):
 
 
 def test_transaction_list(temp_beancount_file):
-    code, out, err = run_cli("transaction", "list", str(temp_beancount_file))
+    code, out, err = run_cli("transaction", "list", "--file", str(temp_beancount_file))
     assert code in (0, None)
     assert "Employer" in out
 
@@ -33,6 +33,7 @@ def test_transaction_list_fields(temp_beancount_file):
     code, out, err = run_cli(
         "transaction",
         "list",
+        "--file",
         str(temp_beancount_file),
         "--format",
         "json",
@@ -61,7 +62,7 @@ def test_transaction_add_json(temp_beancount_file):
         ],
     }
     code, out, err = run_cli(
-        "transaction", "add", str(temp_beancount_file), "--json", json.dumps(payload)
+        "transaction", "add", "--file", str(temp_beancount_file), "--input", json.dumps(payload)
     )
     assert code in (0, None)
 
@@ -73,6 +74,7 @@ def test_account_create(temp_beancount_file):
     code, out, err = run_cli(
         "account",
         "create",
+        "--file",
         str(temp_beancount_file),
         "--name",
         "Liabilities:CreditCard",
@@ -85,7 +87,7 @@ def test_account_create(temp_beancount_file):
 
 def test_commodity_create(temp_beancount_file):
     code, out, err = run_cli(
-        "commodity", "create", "ETH", str(temp_beancount_file), "--name", "Ethereum"
+        "commodity", "create", "ETH", "--file", str(temp_beancount_file), "--name", "Ethereum"
     )
     assert code in (0, None)
     assert "created" in out
@@ -98,11 +100,11 @@ def test_tree_command(temp_beancount_file):
 
 
 def test_report_aliases(temp_beancount_file):
-    code, out, err = run_cli("report", "balance-sheet", str(temp_beancount_file))
+    code, out, err = run_cli("report", "balance-sheet", "--file", str(temp_beancount_file))
     assert code in (0, None)
     assert "Balance Sheet" in out
 
-    code, out, err = run_cli("report", "trial-balance", str(temp_beancount_file))
+    code, out, err = run_cli("report", "trial-balance", "--file", str(temp_beancount_file))
     assert code in (0, None)
     assert "Trial Balance" in out
 
@@ -112,7 +114,7 @@ def test_report_aliases(temp_beancount_file):
 
 
 def test_report_holdings(temp_beancount_file):
-    code, out, err = run_cli("report", "holdings", str(temp_beancount_file))
+    code, out, err = run_cli("report", "holdings", "--file", str(temp_beancount_file))
     assert code in (0, None)
     assert "Holdings" in out
 
@@ -141,7 +143,7 @@ def test_report_audit(tmp_path):
         )
     )
     # Test all transactions (older to newest)
-    code, out, err = run_cli("report", "audit", str(path), "--currency", "USD", "--all")
+    code, out, err = run_cli("report", "audit", "--file", str(path), "--currency", "USD", "--all")
     assert code in (0, None)
     assert "Audit Report: USD" in out
     lines = [line for line in out.splitlines() if "Store" in line]
@@ -151,7 +153,7 @@ def test_report_audit(tmp_path):
     assert "Store C" in lines[4]
 
     # Test limit (should show LAST 2 transactions in chronological order: Middle -> Newest)
-    code, out, err = run_cli("report", "audit", str(path), "--currency", "USD", "--limit", "2")
+    code, out, err = run_cli("report", "audit", "--file", str(path), "--currency", "USD", "--limit", "2")
     assert code in (0, None)
     lines = [line for line in out.splitlines() if "Store" in line]
     assert len(lines) == 4
@@ -167,7 +169,7 @@ def test_tx_schema():
 
 
 def test_account_list(temp_beancount_file):
-    code, out, err = run_cli("account", "list", str(temp_beancount_file))
+    code, out, err = run_cli("account", "list", "--file", str(temp_beancount_file))
     assert code in (0, None)
     assert "Assets:Cash" in out
 

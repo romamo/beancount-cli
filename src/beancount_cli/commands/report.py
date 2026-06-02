@@ -17,7 +17,6 @@ app = typer.Agentyper(help="Generate simple reports.")
 
 @app.command(name="balance-sheet")
 def report_balance_sheet(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
@@ -35,7 +34,7 @@ def report_balance_sheet(
         )
         sys.exit(typer.EXIT_VALIDATION)
 
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = LedgerService(actual_file)
     report_service = ReportService(service)
 
@@ -61,7 +60,6 @@ def report_balance_sheet(
 
 @app.command(name="trial-balance")
 def report_trial_balance(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
@@ -79,7 +77,7 @@ def report_trial_balance(
         )
         sys.exit(typer.EXIT_VALIDATION)
 
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = LedgerService(actual_file)
     report_service = ReportService(service)
 
@@ -101,7 +99,6 @@ def report_trial_balance(
 
 @app.command(name="holdings")
 def report_holdings(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
@@ -119,7 +116,7 @@ def report_holdings(
         )
         sys.exit(typer.EXIT_VALIDATION)
 
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = LedgerService(actual_file)
     report_service = ReportService(service)
 
@@ -151,7 +148,6 @@ def report_holdings(
 
 @app.command(name="audit")
 def report_audit(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     currency: str | None = typer.Option(None, "--currency", "-c", help="Currency to audit"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
@@ -160,7 +156,7 @@ def report_audit(
     all_: bool = typer.Option(False, "--all", help="Show all transactions"),
 ):
     """Transaction-level trace for one currency."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     tx_service = TransactionService(actual_file)
 
     audit_currency = currency

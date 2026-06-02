@@ -8,6 +8,7 @@ from beancount_cli.models import (
     BalanceModel,
     CostModel,
     CurrencyCode,
+    PadBalanceModel,
     PostingModel,
     TransactionModel,
 )
@@ -110,3 +111,31 @@ def to_core_balance(model: BalanceModel) -> data.Balance:
         diff_amount=None,
         tolerance=None,
     )
+
+
+def to_core_pad(model: PadBalanceModel) -> tuple[data.Pad, data.Balance]:
+    """Convert a PadBalanceModel into a (Pad, Balance) directive pair.
+
+    The Pad directive is dated one day before the Balance assertion by default,
+    which is the standard Beancount pattern to avoid the 'Unused Pad entry' error.
+    """
+    import datetime
+
+    pad_date = model.pad_date or (model.balance_date - datetime.timedelta(days=1))
+
+    pad = data.Pad(
+        meta=model.meta or {},
+        date=pad_date,
+        account=str(model.account),
+        source_account=str(model.pad_account),
+    )
+    balance = data.Balance(
+        meta={},
+        date=model.balance_date,
+        account=str(model.account),
+        amount=to_core_amount(model.amount),
+        diff_amount=None,
+        tolerance=None,
+    )
+    return pad, balance
+

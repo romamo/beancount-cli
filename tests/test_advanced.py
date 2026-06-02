@@ -43,7 +43,7 @@ def test_complex_include_structure(tmp_path):
 
 def test_subfile_config_resolution(tmp_path):
     """
-    Test that cli-config in a sub-included file is correctly used.
+    Test that a ledger custom directive in a sub-included file is correctly used.
     """
     root_file = tmp_path / "root.beancount"
     inc_dir = tmp_path / "includes"
@@ -56,7 +56,7 @@ def test_subfile_config_resolution(tmp_path):
 
     root_file.write_text('include "includes/config.beancount"')
     inc_file.write_text(
-        '2024-01-01 custom "cli-config" "new_account_file" "local_accounts.beancount"'
+        '2024-01-01 custom "ledger" "new_account_file" "local_accounts.beancount"'
     )
 
     # Passing ROOT file to service

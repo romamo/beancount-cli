@@ -9,13 +9,13 @@ authors = [
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
-    "beancount>=3.0.0",
+    "beancount==3.2.3",
     "beanquery>=0.1.0",
-    "pydantic>=2.0.0",
+    "pydantic==2.13.4",
     "python-dateutil>=2.8.2",
     "beanprice2>=2.1.0",
-    "pydantic-settings>=2.0.0",
-    "agentyper==0.1.12",
+    "pydantic-settings==2.14.1",
+    "agentyper==0.1.13",
 ]
 keywords = ["beancount", "cli", "accounting", "automation", "agent"]
 classifiers = [

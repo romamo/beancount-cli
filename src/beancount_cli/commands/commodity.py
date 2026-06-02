@@ -1,15 +1,21 @@
 import json
+import logging
 import sys
 from pathlib import Path
 
 import agentyper as typer
+from beancount.parser import parser as bp_parser
+from beancount.core import data
 
 from beancount_cli.commands.common import (
     _is_table_format,
     console,
+    error_console,
     get_ledger_file,
     read_json_input,
+    read_stdin,
 )
+from beancount_cli.models import CommodityModel
 from beancount_cli.services import CommodityService
 
 app = typer.Agentyper(help="Manage commodities.")
@@ -17,7 +23,6 @@ app = typer.Agentyper(help="Manage commodities.")
 
 @app.command(name="list")
 def commodity_list(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
@@ -26,7 +31,7 @@ def commodity_list(
     ),
 ):
     """List all commodities."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = CommodityService(actual_file)
     commodities = service.list_commodities(asset_class=asset_class)
 
@@ -46,13 +51,12 @@ def commodity_list(
 
 @app.command(name="check")
 def commodity_check(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
 ):
     """Check for currencies used in transactions but missing a commodity directive."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = CommodityService(actual_file)
     undeclared = service.get_undeclared_commodities()
 
@@ -65,20 +69,108 @@ def commodity_check(
         typer.output(undeclared, title="Undeclared Commodities")
 
 
+@app.command(name="export")
+def commodity_export(
+    file: Path | None = typer.Option(
+        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
+    ),
+    asset_class: str | None = typer.Option(
+        None, "--asset-class", "-c", help="Filter by asset-class meta (e.g. stock, Cash)"
+    ),
+    output_file: Path | None = typer.Option(
+        None, "--output-file", help="Write output to file (default: commodities_file or stdout)"
+    ),
+):
+    """Export commodities as beancount directives."""
+    actual_file = get_ledger_file(file)
+    service = CommodityService(actual_file)
+    commodities = service.list_commodities(asset_class=asset_class)
+
+    content = "\n".join(service._format_commodity_block(c) for c in commodities)
+
+    dest = output_file or service.ledger_service.get_commodities_file()
+    if dest:
+        dest.write_text(content)
+        console.print(f"[green]Exported {len(commodities)} commodities →[/green] {dest}")
+    else:
+        sys.stdout.write(content)
+
+
+@app.command(name="import", mutating=True)
+def commodity_import(
+    file: Path | None = typer.Option(
+        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
+    ),
+    input_file: Path | None = typer.Option(
+        None, "--input-file", help="Read beancount directives from file instead of stdin"
+    ),
+    output_file: Path | None = typer.Option(
+        None, "--output-file", help="Write to file (default: commodities_file from ledger config)"
+    ),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing commodities"),
+    dry_run: bool = False,
+):
+    """Import commodity directives from stdin (or --input-file) into the commodities_file."""
+    stdin_text = Path(input_file).read_text() if input_file else read_stdin()
+    entries, errors, _ = bp_parser.parse_string(stdin_text)
+    if errors:
+        for e in errors:
+            console.print(f"[red]Parse error: {e.message}[/red]")
+        sys.exit(typer.EXIT_VALIDATION)
+
+    commodities = [
+        CommodityModel(currency=e.currency, date=e.date, meta=e.meta)
+        for e in entries
+        if isinstance(e, data.Commodity)
+    ]
+    if not commodities:
+        console.print("[yellow]No commodity directives found in stdin.[/yellow]")
+        return
+
+    actual_file = get_ledger_file(file)
+    service = CommodityService(actual_file)
+    dest = output_file or service.ledger_service.get_commodities_file()
+
+    results, commodities_file = service.import_commodities(
+        commodities, output_file=dest, overwrite=overwrite, dry_run=dry_run
+    )
+
+    stdout_mode = not dry_run and commodities_file is None
+    status_console = error_console if stdout_mode else console
+    verbose = logging.getLogger().isEnabledFor(logging.INFO)
+    prefix = "[dim](dry-run)[/dim] " if dry_run else ""
+    for r in results:
+        if not verbose and not dry_run and r.action == "skipped":
+            continue
+        color = {"added": "green", "overwritten": "yellow", "skipped": "dim"}.get(r.action, "white")
+        status_console.print(f"{prefix}[{color}]{r.action:12}[/{color}] {r.currency}")
+
+    if dry_run:
+        return
+
+    if commodities_file:
+        console.print(f"\n[green]Done →[/green] {commodities_file}")
+    else:
+        # No destination configured — stream added/overwritten entries to stdout
+        written = {r.currency for r in results if r.action != "skipped"}
+        for c in commodities:
+            if str(c.currency) in written:
+                sys.stdout.write(service._format_commodity_block(c))
+
+
 @app.command(name="create")
 def commodity_create(
     currency: str | None = typer.Argument(None, help="Currency code (e.g. USD)"),
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
     name: str | None = typer.Option(None, "--name", "-n", help="Full name"),
     json_data: str | None = typer.Option(
-        None, "--json", "-j", help="JSON string data (or '-' to read from STDIN)"
+        None, "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
     ),
 ):
     """Create a new commodity."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     service = CommodityService(actual_file)
 
     if json_data:
@@ -90,11 +182,12 @@ def commodity_create(
             if not curr:
                 console.print(f"[yellow]Skipping invalid commodity entry: {item}[/yellow]")
                 continue
-            service.create_commodity(curr, name=comm_name)
+            meta = {k: v for k, v in item.items() if k not in ("currency", "name")}
+            service.create_commodity(curr, name=comm_name, meta=meta)
             console.print(f"[green]Commodity {curr} created.[/green]")
     else:
         if not currency:
-            console.print("[red]Error: currency argument is required if not using --json.[/red]")
+            console.print("[red]Error: currency argument is required if not using --input.[/red]")
             sys.exit(typer.EXIT_VALIDATION)
         service.create_commodity(currency, name=name)
         console.print(f"[green]Commodity {currency} created.[/green]")

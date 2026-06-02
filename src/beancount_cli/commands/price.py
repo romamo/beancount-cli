@@ -9,6 +9,7 @@ from tempfile import gettempdir
 import agentyper as typer
 from beancount.core import data
 from beancount.core.data import sorted as bean_sorted
+from beancount.ops import lifetimes as bean_lifetimes
 from beancount.parser import printer
 from beanprice import price as bp_price
 
@@ -20,7 +21,6 @@ app = typer.Agentyper(help="Manage prices.")
 
 @app.command(name="check")
 def price_check(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
@@ -32,7 +32,7 @@ def price_check(
     ),
 ):
     """Check for missing price data in the ledger."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     ledger_service = LedgerService(actual_file)
     price_service = PriceService(ledger_service)
 
@@ -61,7 +61,6 @@ def price_check(
 
 @app.command(name="check-anomalies")
 def price_check_anomalies(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
@@ -73,7 +72,7 @@ def price_check_anomalies(
     ),
 ):
     """Check for sudden price jumps or drops in the ledger."""
-    actual_file = get_ledger_file(ledger_file or file)
+    actual_file = get_ledger_file(file)
     ledger_service = LedgerService(actual_file)
     price_service = PriceService(ledger_service)
 
@@ -162,14 +161,19 @@ def price_fetch(
 
         assert primary_ledger_service is not None  # always set — files_to_load is non-empty
 
-        _warn_missing_price_meta_entries(entries, "Skipping fetch.")
+        _warn_missing_price_meta_entries(
+            entries, "Skipping fetch.", primary_ledger_service.get_operating_currencies()
+        )
 
-        if update or fill_gaps:
-            jobs = bp_price.get_price_jobs_up_to_date(
-                entries, date_last=datetime.now().date(), inactive=inactive
-            )
-        else:
-            jobs = bp_price.get_price_jobs_at_date(entries, date=None, inactive=inactive)
+        date_last = datetime.now().date()
+        jobs = _resolve_price_jobs(entries, date_last, inactive, update, fill_gaps)
+
+        if not inactive:
+            inactive_jobs = _resolve_price_jobs(entries, date_last, True, update, fill_gaps)
+            cash_jobs = _get_cash_currency_jobs(entries, date_last, inactive_jobs)
+            if cash_jobs:
+                existing = {(j.base, j.quote, j.date) for j in jobs}
+                jobs.extend(j for j in cash_jobs if (j.base, j.quote, j.date) not in existing)
 
         if not jobs:
             error_console.print("[yellow]No price jobs to execute.[/yellow]")
@@ -283,6 +287,48 @@ def price_fetch(
         sys.exit(typer.EXIT_SYSTEM)
 
 
+def _resolve_price_jobs(
+    entries: list[data.Directive],
+    date_last: date,
+    inactive: bool,
+    update: bool,
+    fill_gaps: bool,
+) -> list:
+    if update or fill_gaps:
+        return bp_price.get_price_jobs_up_to_date(entries, date_last=date_last, inactive=inactive)
+    return bp_price.get_price_jobs_at_date(entries, date=None, inactive=inactive)
+
+
+def _get_cash_currency_jobs(
+    entries: list[data.Directive],
+    date_last: date,
+    inactive_jobs: list,
+) -> list:
+    """Return price jobs for currencies held as cash that beanprice silently drops.
+
+    beanprice's lifetimes tracker keys holdings as (currency, cost_currency). Cash
+    currencies produce (base, None) keys, but declared price sources register as
+    (base, quote) — they never match, so the filter at price.py:478 drops them.
+    """
+    raw_lifetimes = bean_lifetimes.get_commodity_lifetimes(entries)
+    cash_bases = {
+        base
+        for (base, cost), intervals in raw_lifetimes.items()
+        if cost is None and intervals
+    }
+    if not cash_bases:
+        return []
+
+    declared_triples = bp_price.find_currencies_declared(entries, date_last)
+    cash_pairs = {
+        (base, quote) for base, quote, _ in declared_triples if base in cash_bases
+    }
+    if not cash_pairs:
+        return []
+
+    return [job for job in inactive_jobs if (job.base, job.quote) in cash_pairs]
+
+
 def _find_price_file(tree: dict) -> Path | None:
     """Search an include tree for a beancount file with 'price' in its name or parent directory."""
     for k, v in tree.items():
@@ -298,10 +344,14 @@ def _find_price_file(tree: dict) -> Path | None:
 
 def _warn_missing_price_meta(ledger_service: LedgerService, context: str) -> None:
     """Warn about held commodities that lack 'price' metadata and cannot be priced."""
-    _warn_missing_price_meta_entries(ledger_service.entries, context)
+    _warn_missing_price_meta_entries(
+        ledger_service.entries, context, ledger_service.get_operating_currencies()
+    )
 
 
-def _warn_missing_price_meta_entries(entries: list[data.Directive], context: str) -> None:
+def _warn_missing_price_meta_entries(
+    entries: list[data.Directive], context: str, operating_currencies: list[str] | None = None
+) -> None:
     """Warn about held commodities (from a merged entry list) that lack 'price' metadata."""
     from beancount.core import convert
     from beancount.core.inventory import Inventory
@@ -322,13 +372,11 @@ def _warn_missing_price_meta_entries(entries: list[data.Directive], context: str
         if not pos.units.number.is_zero()
     }
 
-    # Extract operating currencies from options if possible
-    # In a merged entry list, we might have 'option' directives as Custom entries or similar?
-    # Actually, Beancount usually loads them into an options map.
-    # For now, we'll just check commodity metadata.
-
+    excluded = set(operating_currencies or [])
     commodity_meta = {e.currency: e.meta for e in entries if isinstance(e, data.Commodity)}
     for curr in sorted(held):
+        if curr in excluded:
+            continue
         meta = commodity_meta.get(curr, {})
         if not meta or "price" not in meta:
             error_console.print(
