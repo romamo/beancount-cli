@@ -132,7 +132,7 @@ wheels = [
 
 [[package]]
 name = "beancount-cli"
-version = "0.2.13"
+version = "0.2.14"
 source = { editable = "." }
 dependencies = [
     { name = "agentyper" },
