@@ -124,7 +124,7 @@ class PadBalanceModel(BaseModel):
     balance_date: datetime.date
     account: AccountName.Input
     amount: AmountModel
-    pad_account: AccountName.Input
+    pad_account: AccountName.Input = "Expenses:Other"
     pad_date: datetime.date | None = None
     """Date for the pad directive. Defaults to balance_date minus one day."""
     meta: dict[str, Any] = Field(default_factory=dict)

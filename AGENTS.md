@@ -51,21 +51,20 @@ uv run bean account pad-balance \
   --account  <account>      # e.g. Assets:BE:Wise:EUR
   --amount   <number>       # e.g. 1777
   --currency <code>         # e.g. EUR
-  --pad-account <account>   # e.g. Expenses:Other or Equity:Opening-Balances
+  [--pad-account <account>] # default: Expenses:Other
   [--date    YYYY-MM-DD]    # balance assertion date, default: today
   [--pad-date YYYY-MM-DD]   # pad directive date, default: balance-date minus 1 day
   [--file    FILE]          # ledger file (or set BEANCOUNT_FILE)
 ```
 
-**Both `--account` and `--pad-account` must already exist** (have an `Open` directive). Create them first with `account create` if needed.
+**`--account` must already exist** (have an `Open` directive). `--pad-account` defaults to `Expenses:Other` and does not need to pre-exist in the CLI — beancount will validate it when the ledger is next loaded.
 
 ### Example — user says "I spent some and have now Wise EUR 1777"
 
 ```bash
 uv run bean account pad-balance \
   --account Assets:BE:Wise:EUR \
-  --amount 1777 --currency EUR \
-  --pad-account Expenses:Other
+  --amount 1777 --currency EUR
 ```
 
 Produces in the ledger:

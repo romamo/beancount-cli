@@ -728,13 +728,6 @@ class AccountService:
 
         if str(model.account) not in existing:
             raise ValueError(f"Account '{model.account}' does not exist (no Open directive).")
-        if str(model.pad_account) not in existing:
-            raise ValueError(
-                f"Pad account '{model.pad_account}' does not exist (no Open directive). "
-                "Create it first with: uv run bean account create --name '"
-                + str(model.pad_account)
-                + "'"
-            )
 
         core_pad, core_balance = to_core_pad(model)
         pad_str = printer.format_entry(core_pad)

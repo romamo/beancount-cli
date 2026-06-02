@@ -123,11 +123,11 @@ def account_pad_balance(
     currency: str | None = typer.Option(
         None, "--currency", "-c", help="Currency of the target balance (e.g. EUR)"
     ),
-    pad_account: str | None = typer.Option(
-        None,
+    pad_account: str = typer.Option(
+        "Expenses:Other",
         "--pad-account",
         "-p",
-        help="Account to absorb the difference (e.g. Expenses:Other)",
+        help="Account to absorb the difference (default: Expenses:Other)",
     ),
     balance_date: str | None = typer.Option(
         None,
@@ -174,7 +174,6 @@ def account_pad_balance(
                 ("--account", account),
                 ("--amount", amount),
                 ("--currency", currency),
-                ("--pad-account", pad_account),
             ]
             if not v
         ]
@@ -191,7 +190,7 @@ def account_pad_balance(
             balance_date=b_date,
             account=account,  # type: ignore[arg-type]
             amount={"number": amount, "currency": currency},
-            pad_account=pad_account,  # type: ignore[arg-type]
+            pad_account=pad_account,
             pad_date=p_date,
         )
 
