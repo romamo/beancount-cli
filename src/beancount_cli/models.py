@@ -13,7 +13,11 @@ def validate_account_name(v: Any) -> str:
     if not isinstance(v, str):
         raise TypeError("string required")
     if not re.match(r"^[A-Z][A-Za-z0-9\-]*(?::[A-Z0-9][A-Za-z0-9\-]*)+$", v):
-        raise ValueError(f"Invalid account name format: {v}")
+        raise ValueError(
+            f"Invalid account name '{v}': must have at least two colon-separated segments, "
+            f"the first starting with an uppercase letter, each subsequent segment starting "
+            f"with an uppercase letter or digit (e.g. 'Assets:US:Bank:Checking')"
+        )
     return v
 
 
