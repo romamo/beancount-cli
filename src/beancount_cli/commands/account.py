@@ -68,11 +68,17 @@ def account_create(
             ta = TypeAdapter(list[AccountModel])
             models = ta.validate_python(data_input)
             for m in models:
-                service.create_account(m, target_file=target)
+                try:
+                    service.create_account(m, target_file=target)
+                except ValueError as e:
+                    typer.exit_error(str(e))
                 console.print(f"[green]Account {m.name} created.[/green]")
         else:
             model = AccountModel(**data_input)
-            service.create_account(model, target_file=target)
+            try:
+                service.create_account(model, target_file=target)
+            except ValueError as e:
+                typer.exit_error(str(e))
             console.print(f"[green]Account {model.name} created.[/green]")
     else:
         if not name:
@@ -85,7 +91,10 @@ def account_create(
 
         currencies = [c.strip() for c in currency_opt.split(",")] if currency_opt else []
         model = AccountModel(name=name, open_date=d, currencies=currencies)
-        service.create_account(model, target_file=target)
+        try:
+            service.create_account(model, target_file=target)
+        except ValueError as e:
+            typer.exit_error(str(e))
         console.print(f"[green]Account {name} created.[/green]")
 
 
