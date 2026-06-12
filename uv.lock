@@ -8,15 +8,15 @@ resolution-markers = [
 
 [[package]]
 name = "agentyper"
-version = "0.1.16"
+version = "0.1.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/84/a1/a312eb795c9c8e9cb00dc0c54c18f7868056b8f2715114318134f80e0fe8/agentyper-0.1.16.tar.gz", hash = "sha256:36ad87c8f17fe1359838c24c6208bdd2f0c9261215f9fc9ebb3abd5d3e83194a", size = 48763, upload-time = "2026-06-11T18:26:02.994Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/a1/dc769c45580da9d2efd7c35491898d2932be5a1822bd2a68b5ffe12fb89c/agentyper-0.1.17.tar.gz", hash = "sha256:eabb48e2e6b9294a1455d5fdfe09a3039b92db627376872acee53655dd9f87b1", size = 48849, upload-time = "2026-06-12T15:15:33.331Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/09/3f/6646bd07eab5c6a1f4f635a3b50238868d6889577b3b7470342f0b157e29/agentyper-0.1.16-py3-none-any.whl", hash = "sha256:c84dd38c961b9a30d291c71dbbc90de0212ba6d17d06a7298dba78c87e75d683", size = 44502, upload-time = "2026-06-11T18:26:02.055Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/a2/66666c12ebec371ff6736c2be3cf66e66862c4dd040dadd972da37eb63b2/agentyper-0.1.17-py3-none-any.whl", hash = "sha256:cd581a81104937c05461be048146b3bd2e438e714c8c54a5763a4316cccab202", size = 44520, upload-time = "2026-06-12T15:15:32.26Z" },
 ]
 
 [[package]]
@@ -155,7 +155,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentyper", specifier = "==0.1.16" },
+    { name = "agentyper", specifier = "==0.1.17" },
     { name = "beancount", specifier = "==3.2.3" },
     { name = "beanprice2", specifier = ">=2.1.0" },
     { name = "beanquery", specifier = ">=0.1.0" },
