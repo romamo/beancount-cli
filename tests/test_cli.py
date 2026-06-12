@@ -53,16 +53,23 @@ def test_transaction_list_fields(temp_beancount_file):
 
 
 def test_transaction_add_json(temp_beancount_file):
-    payload = {
-        "date": "2023-12-01",
-        "narration": "CLI Test",
-        "postings": [
+    postings = json.dumps(
+        [
             {"account": "Assets:Cash", "units": {"number": -10, "currency": "USD"}},
             {"account": "Expenses:Food", "units": {"number": 10, "currency": "USD"}},
-        ],
-    }
+        ]
+    )
     code, out, err = run_cli(
-        "transaction", "add", "--file", str(temp_beancount_file), "--input", json.dumps(payload)
+        "transaction",
+        "add",
+        "--file",
+        str(temp_beancount_file),
+        "--date",
+        "2023-12-01",
+        "--narration",
+        "CLI Test",
+        "--postings",
+        postings,
     )
     assert code in (0, None)
 

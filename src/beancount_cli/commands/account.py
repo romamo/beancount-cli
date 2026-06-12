@@ -1,4 +1,3 @@
-import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -6,14 +5,12 @@ from pathlib import Path
 import agentyper as typer
 from beancount.core import data
 from beancount.parser import printer
-from pydantic import TypeAdapter
 
 from beancount_cli.adapters import to_core_balance, to_core_pad
 from beancount_cli.commands.common import (
     _is_table_format,
     console,
     get_ledger_file,
-    read_json_input,
 )
 from beancount_cli.models import AccountModel, BalanceModel, PadBalanceModel
 from beancount_cli.services import AccountService
@@ -23,8 +20,13 @@ app = typer.Agentyper(help="Manage accounts.")
 
 def _format_open(m: AccountModel) -> str:
     return printer.format_entry(
-        data.Open(meta={}, date=m.open_date, account=str(m.name),
-                  currencies=[str(c) for c in m.currencies], booking=None)
+        data.Open(
+            meta={},
+            date=m.open_date,
+            account=str(m.name),
+            currencies=[str(c) for c in m.currencies],
+            booking=None,
+        )
     )
 
 
@@ -58,62 +60,27 @@ def account_create(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
-    name: str | None = typer.Option(None, "--name", "-n", help="Account name (e.g. Assets:Bank)"),
+    name: str = typer.Option(..., "--name", "-n", help="Account name (e.g. Assets:Bank)"),
     currency_opt: str | None = typer.Option(
         None, "--currency", "-c", help="Currencies (comma-separated)"
     ),
     open_date: str | None = typer.Option(None, "--date", "-d", help="Open date (YYYY-MM-DD)"),
-    json_data: str | None = typer.Option(
-        None, "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
-    ),
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
     dry_run: bool = False,
 ):
     """Create a new account."""
-    if json_data:
-        data_input = json.loads(read_json_input(json_data))
-        if isinstance(data_input, list):
-            ta = TypeAdapter(list[AccountModel])
-            models = ta.validate_python(data_input)
-            service = None if dry_run else AccountService(get_ledger_file(file))
-            for m in models:
-                if dry_run:
-                    sys.stdout.write(_format_open(m) + "\n")
-                    continue
-                try:
-                    service.create_account(m, target_file=target)
-                except ValueError as e:
-                    typer.exit_error(str(e))
-                console.print(f"[green]Account {m.name} created.[/green]")
-        else:
-            model = AccountModel(**data_input)
-            if dry_run:
-                sys.stdout.write(_format_open(model) + "\n")
-                return
-            try:
-                AccountService(get_ledger_file(file)).create_account(model, target_file=target)
-            except ValueError as e:
-                typer.exit_error(str(e))
-            console.print(f"[green]Account {model.name} created.[/green]")
-    else:
-        if not name:
-            console.print("[red]Error: --name is required if not using --input.[/red]")
-            sys.exit(typer.EXIT_VALIDATION)
+    d = date.fromisoformat(open_date) if open_date else date.today()
 
-        d = date.today()
-        if open_date:
-            d = date.fromisoformat(open_date)
-
-        currencies = [c.strip() for c in currency_opt.split(",")] if currency_opt else []
-        model = AccountModel(name=name, open_date=d, currencies=currencies)
-        if dry_run:
-            sys.stdout.write(_format_open(model) + "\n")
-            return
-        try:
-            AccountService(get_ledger_file(file)).create_account(model, target_file=target)
-        except ValueError as e:
-            typer.exit_error(str(e))
-        console.print(f"[green]Account {name} created.[/green]")
+    currencies = [c.strip() for c in currency_opt.split(",")] if currency_opt else []
+    model = AccountModel(name=name, open_date=d, currencies=currencies)
+    if dry_run:
+        sys.stdout.write(_format_open(model) + "\n")
+        return
+    try:
+        AccountService(get_ledger_file(file)).create_account(model, target_file=target)
+    except ValueError as e:
+        typer.exit_error(str(e))
+    console.print(f"[green]Account {name} created.[/green]")
 
 
 @app.command(name="balance", mutating=True)
@@ -121,15 +88,19 @@ def account_balance(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
-    json_data: str = typer.Option(
-        ..., "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
-    ),
+    account: str = typer.Option(..., "--account", help="Account name (e.g. Assets:Bank)"),
+    date: str = typer.Option(..., "--date", help="Balance date (YYYY-MM-DD)"),
+    amount: str = typer.Option(..., "--amount", help="Balance amount (e.g. 1000.00)"),
+    currency: str = typer.Option(..., "--currency", "-c", help="Currency code (e.g. USD)"),
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
     dry_run: bool = False,
 ):
     """Add a balance directive for an account."""
-    data_input = json.loads(read_json_input(json_data))
-    model = BalanceModel(**data_input)
+    model = BalanceModel(
+        account=account,
+        date=date,
+        amount={"number": amount, "currency": currency},
+    )
     if dry_run:
         sys.stdout.write(printer.format_entry(to_core_balance(model)) + "\n")
         return
@@ -144,14 +115,12 @@ def account_pad_balance(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
-    account: str | None = typer.Option(
-        None, "--account", help="Account to adjust (e.g. Assets:BE:Wise:EUR)"
+    account: str = typer.Option(
+        ..., "--account", help="Account to adjust (e.g. Assets:BE:Wise:EUR)"
     ),
-    amount: str | None = typer.Option(
-        None, "--amount", help="Target balance amount (e.g. 1777.00)"
-    ),
-    currency: str | None = typer.Option(
-        None, "--currency", "-c", help="Currency of the target balance (e.g. EUR)"
+    amount: str = typer.Option(..., "--amount", help="Target balance amount (e.g. 1777.00)"),
+    currency: str = typer.Option(
+        ..., "--currency", "-c", help="Currency of the target balance (e.g. EUR)"
     ),
     pad_account: str = typer.Option(
         "Expenses:Other",
@@ -170,9 +139,6 @@ def account_pad_balance(
         "--pad-date",
         help="Date of the pad directive (YYYY-MM-DD). Defaults to balance-date minus 1 day.",
     ),
-    json_data: str | None = typer.Option(
-        None, "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
-    ),
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
     dry_run: bool = False,
 ):
@@ -186,41 +152,17 @@ def account_pad_balance(
         --account Assets:BE:Wise:EUR \\
         --amount 1777 --currency EUR \\
         --pad-account Expenses:Other
-
-    JSON example (for agent pipelines):
-      echo '{"account": "Assets:BE:Wise:EUR", "amount": {"number": 1777, "currency": "EUR"}, \\
-             "pad_account": "Expenses:Other", "balance_date": "2026-06-02"}' \\
-        | uv run bean account pad-balance --input -
     """
-    if json_data:
-        data_input = json.loads(read_json_input(json_data))
-        model = PadBalanceModel(**data_input)
-    else:
-        missing = [
-            f
-            for f, v in [
-                ("--account", account),
-                ("--amount", amount),
-                ("--currency", currency),
-            ]
-            if not v
-        ]
-        if missing:
-            console.print(
-                f"[red]Error: {', '.join(missing)} required when not using --input.[/red]"
-            )
-            sys.exit(typer.EXIT_VALIDATION)
+    b_date = date.fromisoformat(balance_date) if balance_date else date.today()
+    p_date = date.fromisoformat(pad_date) if pad_date else None
 
-        b_date = date.fromisoformat(balance_date) if balance_date else date.today()
-        p_date = date.fromisoformat(pad_date) if pad_date else None
-
-        model = PadBalanceModel(
-            balance_date=b_date,
-            account=account,  # type: ignore[arg-type]
-            amount={"number": amount, "currency": currency},
-            pad_account=pad_account,
-            pad_date=p_date,
-        )
+    model = PadBalanceModel(
+        balance_date=b_date,
+        account=account,
+        amount={"number": amount, "currency": currency},
+        pad_account=pad_account,
+        pad_date=p_date,
+    )
 
     if dry_run:
         core_pad, core_balance = to_core_pad(model)

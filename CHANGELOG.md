@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] - 2026-06-12
+
+### Changed
+- Upgraded `agentyper` to `0.1.16`, which provides `bean exec` as a built-in JSONL batch command (replaces the custom implementation).
+- Replaced `--input` / `-i` JSON-stdin flags with individual CLI flags on `transaction add`, `account create`, `account balance`, `account pad-balance`, and `commodity create`.
+- `bean exec` now maps JSONL payload fields to individual command flags automatically via agentyper's built-in dispatch.
+
+### Removed
+- `--input` / `-i` flag removed from all mutating commands; use `bean exec` for batch pipelines.
+
 ## [0.2.14] - 2026-06-02
 
 ### Added

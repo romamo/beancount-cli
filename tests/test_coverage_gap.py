@@ -41,13 +41,19 @@ def test_tx_list_json_format(temp_beancount_file):
     assert isinstance(data, (list, dict))
 
 
-def test_account_create_json_batch(temp_beancount_file):
-    """Exercises the JSON batch path in account_create_cmd."""
-    payload = jsonlib.dumps(
-        [{"name": "Assets:Savings2", "open_date": "2024-01-01", "currencies": ["USD"]}]
-    )
+def test_account_create_individual_flags(temp_beancount_file):
+    """Exercises account create with individual flags."""
     code, out, err = _run_cli(
-        "account", "create", "--file", str(temp_beancount_file), "--input", payload
+        "account",
+        "create",
+        "--file",
+        str(temp_beancount_file),
+        "--name",
+        "Assets:Savings2",
+        "--date",
+        "2024-01-01",
+        "--currency",
+        "USD",
     )
     assert code in (0, None)
 

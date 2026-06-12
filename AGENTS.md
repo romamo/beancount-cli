@@ -26,16 +26,14 @@ If you are executing shell commands to help a human analyze or modify their `mai
 - **Single Item Retrieval**: Use `--format json` when you require nested, hierarchical data structures.
 - **Human Display**: The default format is `table`. Only use this if you are dumping the raw execution output directly to the user's terminal interface. 
 
-### Advanced JSON Data Pipelines
-- **Data Insertion**: Write commands (like `transaction add`, `account create`, `commodity create`) accept rigorous JSON payloads dynamically through STDIN (`--input -`).
-- **Schema Discovery**: If you need to know the required JSON structure to insert a transaction via STDIN, DO NOT GUESS. Run:
+### Advanced Data Pipelines
+- **Schema Discovery**: If you need to know the exact parameters for a command, run:
    ```bash
-   uv run bean transaction schema
-   ``` 
-   This will output the exact Pydantic boundary schema expected by the application.
+   uv run bean transaction add --schema
+   uv run bean account create --schema
+   ```
+   This outputs the JSON schema for every argument.
 - **Native BQL**: `transaction list` supports Beancount Query Language (BQL) directly via the `--where` flag (e.g., `uv run bean transaction list --where "account ~ 'Expenses'"`).
-- **Unix Composability**: Use the global `--format` flag *before* the command to pipe outputs.
-   - *Example Pipeline:* `uv run bean --format json account list | uv run bean account create --input -`
 - **Batch Processing**: Never loop shell executions to insert items one-by-one! Use `bean exec` to dispatch a JSONL stream — one JSON object per line — that can mix any command type in a single pass:
    ```bash
    # Mixed-command JSONL stream written to the ledger
@@ -44,7 +42,18 @@ If you are executing shell commands to help a human analyze or modify their `mai
    # Same stream, preview without writing
    cat commands.jsonl | uv run bean exec --dry-run
    ```
-   Each line must have a `_cmd` field (e.g. `transaction.add`, `account.create`, `commodity.create`). Use `_opts` for CLI flags that cannot go through the payload (e.g. `{"_opts": {"draft": true}}`). Pass `--ignore-errors` to continue on failures and collect all errors before exiting.
+   Each line must have a `_cmd` field (e.g. `transaction.add`, `account.create`, `commodity.create`). Use `_opts` for per-line flag overrides (e.g. `{"_opts": {"draft": true}}`). Pass `--ignore-errors` to continue on failures.
+
+   Each processed line emits a structured JSON result to stdout:
+   ```json
+   {"ok": true,  "exit_code": 0, "line": 1, "cmd": "account.create", "result": {...}}
+   {"ok": false, "exit_code": 5, "line": 2, "cmd": "transaction.add", "error": "..."}
+   ```
+
+   **`transaction.add` example payload:**
+   ```json
+   {"_cmd": "transaction.add", "date": "2024-01-15", "narration": "Groceries", "payee": "Store", "postings": [{"account": "Expenses:Food", "units": {"number": 50, "currency": "USD"}}, {"account": "Assets:Cash", "units": {"number": -50, "currency": "USD"}}]}
+   ```
 
 ## 2. Adjusting an Account Balance (Pad + Balance)
 
@@ -82,15 +91,11 @@ Produces in the ledger:
 2026-06-02 balance Assets:BE:Wise:EUR  1777 EUR
 ```
 
-### JSON / pipeline form
+### Via `bean exec` (batch / agent pipelines)
 
 ```bash
-echo '{
-  "account": "Assets:BE:Wise:EUR",
-  "amount": {"number": 1777, "currency": "EUR"},
-  "pad_account": "Expenses:Other",
-  "balance_date": "2026-06-02"
-}' | uv run bean account pad-balance --input -
+echo '{"_cmd": "account.pad-balance", "account": "Assets:BE:Wise:EUR", "amount": "1777", "currency": "EUR", "pad_account": "Expenses:Other", "balance_date": "2026-06-02"}' \
+  | uv run bean exec
 ```
 
 ### When to use which pad account

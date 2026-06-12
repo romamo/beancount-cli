@@ -2,9 +2,8 @@ import json
 from pathlib import Path
 
 import agentyper as typer
-from pydantic import TypeAdapter
 
-from beancount_cli.commands.common import _is_table_format, get_ledger_file, read_json_input
+from beancount_cli.commands.common import _is_table_format, get_ledger_file
 from beancount_cli.models import TransactionModel
 from beancount_cli.services import TransactionService
 
@@ -50,25 +49,27 @@ def tx_add(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
-    json_data: str = typer.Option(
-        ..., "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
-    ),
+    date: str = typer.Option(..., "--date", help="Transaction date (YYYY-MM-DD)"),
+    narration: str = typer.Option(..., "--narration", help="Transaction narration"),
+    postings: str = typer.Option(..., "--postings", help="JSON array of posting objects"),
+    payee: str | None = typer.Option(None, "--payee", help="Payee name"),
+    tags: str = typer.Option("[]", "--tags", help="JSON array of tags"),
+    links: str = typer.Option("[]", "--links", help="JSON array of links"),
     draft: bool = typer.Option(False, "--draft", help="Mark as pending (!)"),
     print_only: bool = typer.Option(False, "--print", help="Print only, do not write"),
     dry_run: bool = False,
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
 ):
     """Add a new transaction."""
-    actual_file = get_ledger_file(file)
-    service = TransactionService(actual_file)
-
-    data = json.loads(read_json_input(json_data))
-
-    if isinstance(data, list):
-        ta = TypeAdapter(list[TransactionModel])
-        models = ta.validate_python(data)
-        for m in models:
-            service.add_transaction(m, draft=draft, print_only=print_only or dry_run, target_file=target)
-    else:
-        model = TransactionModel(**data)
-        service.add_transaction(model, draft=draft, print_only=print_only or dry_run, target_file=target)
+    model = TransactionModel(
+        date=date,
+        narration=narration,
+        payee=payee,
+        postings=json.loads(postings),
+        tags=set(json.loads(tags)),
+        links=set(json.loads(links)),
+    )
+    service = TransactionService(get_ledger_file(file))
+    service.add_transaction(
+        model, draft=draft, print_only=print_only or dry_run, target_file=target
+    )
