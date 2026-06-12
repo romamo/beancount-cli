@@ -7,6 +7,7 @@ from beancount_cli.commands.account import app as acc_app
 from beancount_cli.commands.commodity import app as comm_app
 from beancount_cli.commands.price import app as price_app
 from beancount_cli.commands.report import app as report_app
+from beancount_cli.commands.exec_cmd import exec_cmd
 from beancount_cli.commands.root import check, format_cmd, tree
 from beancount_cli.commands.transaction import app as tx_app
 
@@ -23,6 +24,7 @@ app.add_typer(comm_app, name="commodity")
 app.command(name="check")(check)
 app.command(name="tree")(tree)
 app.command(name="format")(format_cmd)
+app.command(name="exec", mutating=True)(exec_cmd)
 
 app.add_typer(price_app, name="price")
 

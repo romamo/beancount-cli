@@ -36,7 +36,15 @@ If you are executing shell commands to help a human analyze or modify their `mai
 - **Native BQL**: `transaction list` supports Beancount Query Language (BQL) directly via the `--where` flag (e.g., `uv run bean transaction list --where "account ~ 'Expenses'"`).
 - **Unix Composability**: Use the global `--format` flag *before* the command to pipe outputs.
    - *Example Pipeline:* `uv run bean --format json account list | uv run bean account create --input -`
-- **Batch Processing**: Never loop shell executions to insert items one-by-one! Construct a massive JSON array and pipe the entire array to `transaction add --input -` for instantaneous batch processing.
+- **Batch Processing**: Never loop shell executions to insert items one-by-one! Use `bean exec` to dispatch a JSONL stream — one JSON object per line — that can mix any command type in a single pass:
+   ```bash
+   # Mixed-command JSONL stream written to the ledger
+   cat commands.jsonl | uv run bean exec
+
+   # Same stream, preview without writing
+   cat commands.jsonl | uv run bean exec --dry-run
+   ```
+   Each line must have a `_cmd` field (e.g. `transaction.add`, `account.create`, `commodity.create`). Use `_opts` for CLI flags that cannot go through the payload (e.g. `{"_opts": {"draft": true}}`). Pass `--ignore-errors` to continue on failures and collect all errors before exiting.
 
 ## 2. Adjusting an Account Balance (Pad + Balance)
 

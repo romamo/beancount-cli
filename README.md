@@ -19,6 +19,7 @@ A robust command-line interface and Python library for programmatically managing
     -   Global output formatting: `--format` support (`table`, `json`, `csv`) for all data commands.
 -   **Reporting**: Generate balance, holding, and audit reports with multi-currency conversion.
 -   **Composability**: Built for Unix piping (`json` | `csv`) and batch processing via STDIN.
+-   **JSONL Stream Execution**: `bean exec` dispatches a mixed-command JSONL stream to the ledger; `--dry-run` previews the result without writing.
 -   **Configuration**: Custom Beancount directives for routing new entries to specific files.
 -   **Tab Completion**: We provide tab completions for bash and zsh.
 
@@ -132,6 +133,28 @@ cat tx.json | bean transaction add main.beancount --json -
 
 # Create as Draft (!)
 bean transaction add main.beancount --json ... --draft
+```
+
+### JSONL Stream Execution
+
+Use `bean exec` to dispatch a mixed-command JSONL stream (one JSON object per line) to the ledger in a single pass.
+
+Each line must contain a `_cmd` field mapping to any CLI command (`transaction.add`, `account.create`, `commodity.create`, etc.). Use `_opts` to pass CLI flags that cannot go through the payload.
+
+```bash
+# Write a mixed stream to the ledger
+cat commands.jsonl | uv run bean exec
+
+# Preview without writing
+cat commands.jsonl | uv run bean exec --dry-run
+
+# Continue after errors, collect all failures
+cat commands.jsonl | uv run bean exec --ignore-errors 2>errors.log
+```
+
+Example JSONL line:
+```json
+{"_cmd": "transaction.add", "_opts": {"draft": true}, "date": "2024-01-01", "narration": "Buy coffee", "postings": [{"account": "Expenses:Food", "units": {"number": 5, "currency": "USD"}}, {"account": "Assets:Cash", "units": {"number": -5, "currency": "USD"}}]}
 ```
 
 ### Manage Accounts & Commodities

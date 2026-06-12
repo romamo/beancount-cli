@@ -45,7 +45,7 @@ def tx_list(
         typer.output(results, title=f"Transactions ({len(txs)})")
 
 
-@app.command(name="add")
+@app.command(name="add", mutating=True)
 def tx_add(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
@@ -55,6 +55,7 @@ def tx_add(
     ),
     draft: bool = typer.Option(False, "--draft", help="Mark as pending (!)"),
     print_only: bool = typer.Option(False, "--print", help="Print only, do not write"),
+    dry_run: bool = False,
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
 ):
     """Add a new transaction."""
@@ -67,7 +68,7 @@ def tx_add(
         ta = TypeAdapter(list[TransactionModel])
         models = ta.validate_python(data)
         for m in models:
-            service.add_transaction(m, draft=draft, print_only=print_only, target_file=target)
+            service.add_transaction(m, draft=draft, print_only=print_only or dry_run, target_file=target)
     else:
         model = TransactionModel(**data)
-        service.add_transaction(model, draft=draft, print_only=print_only, target_file=target)
+        service.add_transaction(model, draft=draft, print_only=print_only or dry_run, target_file=target)

@@ -4,8 +4,11 @@ from datetime import date
 from pathlib import Path
 
 import agentyper as typer
+from beancount.core import data
+from beancount.parser import printer
 from pydantic import TypeAdapter
 
+from beancount_cli.adapters import to_core_balance, to_core_pad
 from beancount_cli.commands.common import (
     _is_table_format,
     console,
@@ -16,6 +19,13 @@ from beancount_cli.models import AccountModel, BalanceModel, PadBalanceModel
 from beancount_cli.services import AccountService
 
 app = typer.Agentyper(help="Manage accounts.")
+
+
+def _format_open(m: AccountModel) -> str:
+    return printer.format_entry(
+        data.Open(meta={}, date=m.open_date, account=str(m.name),
+                  currencies=[str(c) for c in m.currencies], booking=None)
+    )
 
 
 @app.command(name="list")
@@ -43,7 +53,7 @@ def account_list(
         typer.output(accounts, title=f"Accounts ({len(accounts)})")
 
 
-@app.command(name="create")
+@app.command(name="create", mutating=True)
 def account_create(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
@@ -57,17 +67,19 @@ def account_create(
         None, "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
     ),
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
+    dry_run: bool = False,
 ):
     """Create a new account."""
-    actual_file = get_ledger_file(file)
-    service = AccountService(actual_file)
-
     if json_data:
         data_input = json.loads(read_json_input(json_data))
         if isinstance(data_input, list):
             ta = TypeAdapter(list[AccountModel])
             models = ta.validate_python(data_input)
+            service = None if dry_run else AccountService(get_ledger_file(file))
             for m in models:
+                if dry_run:
+                    sys.stdout.write(_format_open(m) + "\n")
+                    continue
                 try:
                     service.create_account(m, target_file=target)
                 except ValueError as e:
@@ -75,8 +87,11 @@ def account_create(
                 console.print(f"[green]Account {m.name} created.[/green]")
         else:
             model = AccountModel(**data_input)
+            if dry_run:
+                sys.stdout.write(_format_open(model) + "\n")
+                return
             try:
-                service.create_account(model, target_file=target)
+                AccountService(get_ledger_file(file)).create_account(model, target_file=target)
             except ValueError as e:
                 typer.exit_error(str(e))
             console.print(f"[green]Account {model.name} created.[/green]")
@@ -91,14 +106,17 @@ def account_create(
 
         currencies = [c.strip() for c in currency_opt.split(",")] if currency_opt else []
         model = AccountModel(name=name, open_date=d, currencies=currencies)
+        if dry_run:
+            sys.stdout.write(_format_open(model) + "\n")
+            return
         try:
-            service.create_account(model, target_file=target)
+            AccountService(get_ledger_file(file)).create_account(model, target_file=target)
         except ValueError as e:
             typer.exit_error(str(e))
         console.print(f"[green]Account {name} created.[/green]")
 
 
-@app.command(name="balance")
+@app.command(name="balance", mutating=True)
 def account_balance(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
@@ -107,18 +125,21 @@ def account_balance(
         ..., "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
     ),
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
+    dry_run: bool = False,
 ):
     """Add a balance directive for an account."""
-    actual_file = get_ledger_file(file)
-    service = AccountService(actual_file)
-
     data_input = json.loads(read_json_input(json_data))
     model = BalanceModel(**data_input)
+    if dry_run:
+        sys.stdout.write(printer.format_entry(to_core_balance(model)) + "\n")
+        return
+    actual_file = get_ledger_file(file)
+    service = AccountService(actual_file)
     service.add_balance(model, target_file=target)
     console.print(f"[green]Balance check for {model.account} added.[/green]")
 
 
-@app.command(name="pad-balance")
+@app.command(name="pad-balance", mutating=True)
 def account_pad_balance(
     file: Path | None = typer.Option(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
@@ -153,6 +174,7 @@ def account_pad_balance(
         None, "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
     ),
     target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
+    dry_run: bool = False,
 ):
     """Adjust an account balance using a Pad + Balance directive pair.
 
@@ -170,9 +192,6 @@ def account_pad_balance(
              "pad_account": "Expenses:Other", "balance_date": "2026-06-02"}' \\
         | uv run bean account pad-balance --input -
     """
-    actual_file = get_ledger_file(file)
-    service = AccountService(actual_file)
-
     if json_data:
         data_input = json.loads(read_json_input(json_data))
         model = PadBalanceModel(**data_input)
@@ -203,6 +222,13 @@ def account_pad_balance(
             pad_date=p_date,
         )
 
+    if dry_run:
+        core_pad, core_balance = to_core_pad(model)
+        sys.stdout.write(printer.format_entry(core_pad) + "\n")
+        sys.stdout.write(printer.format_entry(core_balance) + "\n")
+        return
+    actual_file = get_ledger_file(file)
+    service = AccountService(actual_file)
     service.add_pad_balance(model, target_file=target)
     console.print(
         f"[green]Pad + Balance for {model.account} → {model.amount.number} "

@@ -1,11 +1,13 @@
 import json
 import logging
 import sys
+from datetime import date
 from pathlib import Path
 
 import agentyper as typer
 from beancount.core import data
 from beancount.parser import parser as bp_parser
+from beancount.parser import printer
 
 from beancount_cli.commands.common import (
     _is_table_format,
@@ -158,7 +160,7 @@ def commodity_import(
                 sys.stdout.write(service._format_commodity_block(c))
 
 
-@app.command(name="create")
+@app.command(name="create", mutating=True)
 def commodity_create(
     currency: str | None = typer.Argument(None, help="Currency code (e.g. USD)"),
     file: Path | None = typer.Option(
@@ -168,14 +170,13 @@ def commodity_create(
     json_data: str | None = typer.Option(
         None, "--input", "-i", help="JSON string data (or '-' to read from STDIN)"
     ),
+    dry_run: bool = False,
 ):
     """Create a new commodity."""
-    actual_file = get_ledger_file(file)
-    service = CommodityService(actual_file)
-
     if json_data:
         data_input = json.loads(read_json_input(json_data))
         items = data_input if isinstance(data_input, list) else [data_input]
+        service = None if dry_run else CommodityService(get_ledger_file(file))
         for item in items:
             curr = item.get("currency")
             comm_name = item.get("name")
@@ -183,11 +184,23 @@ def commodity_create(
                 console.print(f"[yellow]Skipping invalid commodity entry: {item}[/yellow]")
                 continue
             meta = {k: v for k, v in item.items() if k not in ("currency", "name")}
+            if dry_run:
+                dry_meta = {**meta, "name": comm_name} if comm_name else meta
+                sys.stdout.write(printer.format_entry(
+                    data.Commodity(meta=dry_meta, date=date.today(), currency=curr)
+                ) + "\n")
+                continue
             service.create_commodity(curr, name=comm_name, meta=meta)
             console.print(f"[green]Commodity {curr} created.[/green]")
     else:
         if not currency:
             console.print("[red]Error: currency argument is required if not using --input.[/red]")
             sys.exit(typer.EXIT_VALIDATION)
-        service.create_commodity(currency, name=name)
+        if dry_run:
+            meta = {"name": name} if name else {}
+            sys.stdout.write(printer.format_entry(
+                data.Commodity(meta=meta, date=date.today(), currency=currency)
+            ) + "\n")
+            return
+        CommodityService(get_ledger_file(file)).create_commodity(currency, name=name)
         console.print(f"[green]Commodity {currency} created.[/green]")

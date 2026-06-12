@@ -1,7 +1,9 @@
+import json
 import os
 import sys
 from decimal import Decimal
 from pathlib import Path
+from typing import Iterator
 
 from rich.console import Console
 from rich.table import Table
@@ -44,6 +46,44 @@ def read_json_input(json_data: str) -> str:
     if json_data == "-":
         return sys.stdin.read()
     return json_data
+
+
+def iter_jsonl(
+    ignore_errors: bool, parse_errors: list
+) -> Iterator[tuple[int, str, dict, dict]]:
+    """Yield (lineno, cmd, rest, opts) for each valid JSONL line from stdin.
+
+    Parse errors are appended to parse_errors so callers can decide the exit
+    policy. Exits immediately (fail-fast) when ignore_errors is False.
+    """
+    import agentyper as typer
+
+    if sys.stdin.isatty():
+        error_console.print("[red]Error: stdin is a TTY — pipe input or redirect a file.[/red]")
+        sys.exit(typer.EXIT_VALIDATION)
+
+    for lineno, raw_line in enumerate(sys.stdin, start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            error_console.print(f"[red]line {lineno}: invalid JSON: {exc}[/red]")
+            parse_errors.append(lineno)
+            if not ignore_errors:
+                sys.exit(typer.EXIT_VALIDATION)
+            continue
+        cmd = payload.get("_cmd")
+        if not cmd:
+            error_console.print(f"[red]line {lineno}: missing '_cmd' field[/red]")
+            parse_errors.append(lineno)
+            if not ignore_errors:
+                sys.exit(typer.EXIT_VALIDATION)
+            continue
+        opts = payload.pop("_opts", None) or {}
+        payload.pop("_cmd")
+        yield lineno, cmd, payload, opts
 
 
 def get_ledger_file(override: str | Path | None = None) -> Path:
