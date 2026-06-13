@@ -11,7 +11,7 @@ from beancount_cli.commands.root import check, format_cmd, tree
 from beancount_cli.commands.transaction import app as tx_app
 
 app = typer.Agentyper(
-    name="beancount-cli",
+    name="bean",
     version=__version__,
     help="Beancount CLI tool for managing ledgers.",
 )
