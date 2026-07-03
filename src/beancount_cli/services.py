@@ -59,6 +59,18 @@ class LedgerService:
         # A simple set comprehension over Open directives is fast.
         return sorted([e.account for e in self.entries if isinstance(e, data.Open)])
 
+    def get_account_location(self, name: str) -> str:
+        """Return ' (filename:lineno)' from the Open directive meta, or ''."""
+        if not self._loaded:
+            self.load()
+        for entry in self.entries:
+            if isinstance(entry, data.Open) and entry.account == name:
+                filename = entry.meta.get("filename", "")
+                lineno = entry.meta.get("lineno", "")
+                suffix = f":{lineno}" if lineno else ""
+                return f" ({filename}{suffix})" if filename else ""
+        return ""
+
     def get_commodities(self) -> list[str]:
         if not self._loaded:
             self.load()
@@ -248,7 +260,7 @@ class TransactionService:
         target_file: Path | None = None,
     ) -> None:
         """
-        Add a transaction to the ledger.
+        Add a transaction to the ledger. target_file must be set when print_only is False.
         """
         if draft:
             tx.flag = "!"
@@ -271,68 +283,11 @@ class TransactionService:
             print(entry_str)
             return
 
-        # Check for configured inbox
-        inbox_file_str = self.ledger_service.get_custom_config("new_transaction_file")
-        actual_target = target_file or self.ledger_file
-
-        if inbox_file_str:
-            # Resolve relative to ledger file
-            # Format pattern with transaction data
-            # variables: {year}, {month}, {day}, {slug}, {payee}
-            from datetime import datetime
-
-            # Use transaction date if available, else today
-            tx_date = tx.date
-
-            placeholders = {
-                "year": tx_date.year,
-                "month": f"{tx_date.month:02d}",
-                "day": f"{tx_date.day:02d}",
-                "payee": "".join(c for c in (tx.payee or "unknown") if c.isalnum() or c in "_-"),
-                "slug": "".join(
-                    c for c in (tx.payee or tx.narration or "tx") if c.isalnum() or c in "_-"
-                ),
-            }
-
-            try:
-                formatted_path = inbox_file_str.format(**placeholders)
-            except KeyError as e:
-                # Fallback if unknown placeholder
-                print(
-                    f"Warning: Unknown placeholder {e} in new_transaction_file config. "
-                    "Using raw string.",
-                    file=sys.stderr,
-                )
-                formatted_path = inbox_file_str
-
-            target_path = (self.ledger_file.parent / formatted_path).resolve()
-            actual_target = target_path
-            if target_path.suffix:
-                # Ensure parent dirs exist
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                # Append mode for existing file or new file
-                mode = "a" if actual_target.exists() else "w"
-                with open(actual_target, mode) as f:
-                    if mode == "a":
-                        f.write("\n")
-                    f.write(entry_str)
-                print(f"Transaction appended to {actual_target}")
-                return
-            else:
-                # Directory mode
-                target_path.mkdir(parents=True, exist_ok=True)
-                timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")[:19]
-                filename = f"{timestamp}_{placeholders['slug']}.beancount"
-                actual_target = target_path / filename
-
-                with open(actual_target, "w") as f:
-                    f.write(entry_str)
-                print(f"Transaction created in {actual_target}")
-                return
-
-        with open(actual_target, "a") as f:
+        if target_file is None:
+            target_file = self.ledger_file
+        with open(target_file, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Transaction appended to {actual_target}")
+        print(f"Transaction appended to {target_file}")
 
 
 class MapService:
@@ -664,11 +619,10 @@ class AccountService:
                 )
         return sorted(accounts, key=lambda a: a.name)
 
-    def create_account(self, account: AccountModel, target_file: Path | None = None) -> None:
+    def create_account(self, account: AccountModel, target_file: Path) -> None:
         """
         Create a new account by appending an Open directive.
         """
-        self.ledger_service.load()
         existing = set(self.ledger_service.get_accounts())
         if account.name in existing:
             raise ValueError(f"Account '{account.name}' already exists.")
@@ -683,25 +637,13 @@ class AccountService:
 
         entry_str = printer.format_entry(open_dir)
 
-        # Ideally, we should find where other accounts are defined, but that's complex.
-        # Check for ledger "new_account_file"
-        actual_target = target_file or self.ledger_file
-        config_file = self.ledger_service.get_custom_config("new_account_file")
-
-        if not target_file and config_file:
-            target_path = (self.ledger_file.parent / config_file).resolve()
-            if target_path.exists() or target_path.parent.exists():
-                actual_target = target_path
-
-        with open(actual_target, "a") as f:
+        with open(target_file, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Account created in {actual_target}")
 
-    def add_balance(self, balance: BalanceModel, target_file: Path | None = None) -> None:
+    def add_balance(self, balance: BalanceModel, target_file: Path) -> None:
         """
         Add a Balance directive to the ledger.
         """
-        self.ledger_service.load()
         existing = set(self.ledger_service.get_accounts())
         if str(balance.account) not in existing:
             raise ValueError(f"Account '{balance.account}' does not exist (no Open directive).")
@@ -709,13 +651,10 @@ class AccountService:
         core_balance = to_core_balance(balance)
         entry_str = printer.format_entry(core_balance)
 
-        actual_target = target_file or self.ledger_file
-
-        with open(actual_target, "a") as f:
+        with open(target_file, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Balance check added to {actual_target}")
 
-    def add_pad_balance(self, model: PadBalanceModel, target_file: Path | None = None) -> None:
+    def add_pad_balance(self, model: PadBalanceModel, target_file: Path) -> None:
         """
         Append a Pad + Balance directive pair to the ledger.
 
@@ -723,7 +662,6 @@ class AccountService:
         synthetic transaction on the pad date that brings `account` to `amount`
         by the balance date.  The difference is booked against `pad_account`.
         """
-        self.ledger_service.load()
         existing = set(self.ledger_service.get_accounts())
 
         if str(model.account) not in existing:
@@ -733,13 +671,9 @@ class AccountService:
         pad_str = printer.format_entry(core_pad)
         balance_str = printer.format_entry(core_balance)
 
-        actual_target = target_file or self.ledger_file
-        with open(actual_target, "a") as f:
+        with open(target_file, "a") as f:
             f.write("\n" + pad_str)
             f.write("\n" + balance_str)
-        print(
-            f"Pad ({core_pad.date}) + Balance ({core_balance.date}) directives added to {actual_target}"
-        )
 
 
 class CommodityService:
@@ -776,49 +710,33 @@ class CommodityService:
     def create_commodity(
         self,
         currency: CurrencyCode.Input,
-        name: str | None = None,
+        target_file: Path,
         meta: dict[str, Any] | None = None,
     ) -> None:
         """
         Create a Commodity directive.
         """
-        self.ledger_service.load()
         existing = set(self.ledger_service.get_commodities())
         if str(currency) in existing:
             raise ValueError(f"Commodity '{currency}' already exists.")
 
-        meta = meta or {}
-        if name:
-            meta["name"] = name
-
-        comm_dir = data.Commodity(meta=meta, date=date.today(), currency=currency)
-
-        entry_str = printer.format_entry(comm_dir)
-
-        # Determine target file
-        target_file = self.ledger_file
-        config_file = self.ledger_service.get_custom_config("new_commodity_file")
-
-        if config_file:
-            target_path = (self.ledger_file.parent / config_file).resolve()
-            if target_path.exists() or target_path.parent.exists():
-                target_file = target_path
+        entry_str = self._format_commodity_block(CommodityModel(currency=currency, meta=meta or {}))
 
         with open(target_file, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Commodity created in {target_file}")
 
     def import_commodities(
         self,
         commodities: list[CommodityModel],
-        output_file: Path | None = None,
+        commodities_file: Path | None = None,
         overwrite: bool = False,
         dry_run: bool = False,
     ) -> tuple[list[CommodityImportResult], Path | None]:
         self.ledger_service.load()
-        commodities_file = output_file or self.ledger_service.get_commodities_file()
-        if commodities_file is not None and not commodities_file.exists():
-            raise FileNotFoundError(f"commodities_file not found: {commodities_file}")
+        if commodities_file is not None:
+            commodities_file = Path(commodities_file)
+            if not commodities_file.exists():
+                raise FileNotFoundError(f"commodities_file not found: {commodities_file}")
 
         existing = set(self.ledger_service.get_commodities())
         results: list[CommodityImportResult] = []
