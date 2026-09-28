@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.17] - 2026-09-28
+
+### Changed
+- CLI program name is now `bean` (shown in `--help` and `--version`).
+
+### Fixed
+- `price fetch --fill-gaps` now backfills interior gaps instead of behaving like `--update`; requires `beanprice2>=2.1.2`.
+- `price fetch` keeps running when one price source raises: failed jobs are reported, fetched prices are still written, and the run exits with a partial-failure code.
+- `price fetch` no longer crashes in the "Skipped N jobs" summary when a source returns no data.
+- `commodity import --target` no longer crashes when the target is given as a path string.
+- `price check-anomalies --help` no longer crashes on Python 3.14 (unescaped `%` in help text).
+
 ## [0.2.16] - 2026-06-12
 
 ### Changed

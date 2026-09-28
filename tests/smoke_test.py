@@ -29,7 +29,7 @@ def test_smoke():
         check=False,
     )
     assert result.returncode == 0
-    assert "beancount-cli" in result.stdout
+    assert result.stdout.startswith("bean ")
 
     # 3. Check transaction schema command
     result = subprocess.run(
