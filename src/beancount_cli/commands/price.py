@@ -1,5 +1,6 @@
 import logging
 import sys
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime
 from decimal import Decimal
@@ -139,6 +140,7 @@ def price_fetch(
     label = ", ".join(str(f) for f in files_to_load)
     error_console.print(f"Fetching prices for {label}...", highlight=False)
 
+    errored_jobs: list[tuple[bp_price.DatedPrice, str]] = []
     try:
         cache_path = Path(gettempdir()) / "bean-price.cache"
         bp_price.setup_cache(str(cache_path), clear_cache=False)
@@ -193,43 +195,39 @@ def price_fetch(
         failed_jobs = []
         redundant_count = 0
         try:
-            with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
-                future_to_job = {executor.submit(bp_price.fetch_price, job): job for job in jobs}
-
-                for future in as_completed(future_to_job):
-                    job = future_to_job[future]
-                    price_entry = future.result()
-                    if price_entry:
-                        price_entry = price_entry._replace(
-                            amount=price_entry.amount._replace(
-                                number=price_entry.amount.number.quantize(Decimal("1.000000"))
-                            )
+            for job, price_entry, error in _fetch_price_jobs(jobs):
+                if error is not None:
+                    errored_jobs.append((job, error))
+                elif price_entry:
+                    assert price_entry.amount.number is not None  # beanprice always sets it
+                    price_entry = price_entry._replace(
+                        amount=price_entry.amount._replace(
+                            number=price_entry.amount.number.quantize(Decimal("1.000000"))
                         )
+                    )
 
-                        if (price_entry.date, price_entry.currency) not in existing_prices:
-                            new_price_entries.append(price_entry)
-                            existing_prices.add((price_entry.date, price_entry.currency))
-                            print(printer.format_entry(price_entry), end="")
-                            sys.stdout.flush()
-                        else:
-                            redundant_count += 1
-                            logging.debug(
-                                "Redundant: %s", printer.format_entry(price_entry).strip()
-                            )
+                    if (price_entry.date, price_entry.currency) not in existing_prices:
+                        new_price_entries.append(price_entry)
+                        existing_prices.add((price_entry.date, price_entry.currency))
+                        print(printer.format_entry(price_entry), end="")
+                        sys.stdout.flush()
                     else:
-                        failed_jobs.append(job)
+                        redundant_count += 1
+                        logging.debug("Redundant: %s", printer.format_entry(price_entry).strip())
+                else:
+                    failed_jobs.append(job)
         except KeyboardInterrupt:
             error_console.print("\n[yellow]Interrupt received. Stopping fetch...[/yellow]")
 
+        filtered_prices = []
         if update and not dry_run and new_price_entries:
             filtered_prices, _ = bp_price.filter_redundant_prices(new_price_entries, entries)
-
             if not filtered_prices:
                 error_console.print(
                     "[yellow]All fetched prices are already in the ledger.[/yellow]"
                 )
-                return
 
+        if filtered_prices:
             prices_output = "".join(printer.format_entry(p) for p in filtered_prices)
 
             # Resolve target price file.
@@ -272,19 +270,63 @@ def price_fetch(
             )
 
         if failed_jobs:
-            failed_info = ", ".join(f"{j.currency} on {j.date}" for j in failed_jobs[:5])
-            if len(failed_jobs) > 5:
-                failed_info += f" (+{len(failed_jobs) - 5} more)"
+            failed_info = _summarize(_describe_job(j) for j in failed_jobs)
             error_console.print(
                 f"[yellow]Skipped {len(failed_jobs)} jobs with no data from source: {failed_info}[/yellow]"
             )
 
-        if not new_price_entries and not failed_jobs and not redundant_count:
+        if errored_jobs:
+            errored_info = _summarize(f"{_describe_job(j)} ({e})" for j, e in errored_jobs)
+            error_console.print(
+                f"[yellow]Skipped {len(errored_jobs)} jobs with source errors: {errored_info}[/yellow]",
+                highlight=False,
+            )
+
+        if not new_price_entries and not failed_jobs and not errored_jobs and not redundant_count:
             error_console.print("[yellow]No new prices found.[/yellow]")
 
     except Exception as e:
         error_console.print(f"[red]Error fetching prices: {e}[/red]")
         sys.exit(typer.EXIT_SYSTEM)
+
+    if errored_jobs:
+        sys.exit(typer.ExitCode.PARTIAL_FAILURE)
+
+
+def _fetch_price_job(job: bp_price.DatedPrice) -> tuple[data.Price | None, str | None]:
+    """Fetch one job, returning (price, error) instead of raising on a source failure.
+
+    Price sources signal fetch errors with ValueError (the beanprice source
+    convention) and transport failures with OSError (urllib, requests and
+    curl_cffi errors all derive from it). Anything else is a bug and propagates.
+    """
+    try:
+        return bp_price.fetch_price(job), None
+    except (ValueError, OSError) as exc:
+        logging.error("Error fetching %s: %s", bp_price.format_dated_price_str(job), exc)
+        return None, str(exc)
+
+
+def _fetch_price_jobs(
+    jobs: list[bp_price.DatedPrice],
+) -> Iterator[tuple[bp_price.DatedPrice, data.Price | None, str | None]]:
+    """Fetch jobs concurrently, yielding (job, price, error) as each completes."""
+    with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
+        future_to_job = {executor.submit(_fetch_price_job, job): job for job in jobs}
+        for future in as_completed(future_to_job):
+            yield future_to_job[future], *future.result()
+
+
+def _describe_job(job: bp_price.DatedPrice) -> str:
+    return f"{job.base} on {job.date or 'latest'}"
+
+
+def _summarize(items: Iterable[str], limit: int = 5) -> str:
+    items = list(items)
+    info = ", ".join(items[:limit])
+    if len(items) > limit:
+        info += f" (+{len(items) - limit} more)"
+    return info
 
 
 def _resolve_price_jobs(
