@@ -295,7 +295,9 @@ def _resolve_price_jobs(
     fill_gaps: bool,
 ) -> list:
     if update or fill_gaps:
-        return bp_price.get_price_jobs_up_to_date(entries, date_last=date_last, inactive=inactive)
+        return bp_price.get_price_jobs_up_to_date(
+            entries, date_last=date_last, inactive=inactive, fill_gaps=fill_gaps
+        )
     return bp_price.get_price_jobs_at_date(entries, date=None, inactive=inactive)
 
 
