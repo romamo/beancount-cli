@@ -65,7 +65,7 @@ def price_check_anomalies(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
     threshold: float = typer.Option(
-        1.0, "--threshold", "-t", help="Minimum change percentage as decimal (1.0 = 100%)"
+        1.0, "--threshold", "-t", help="Minimum change percentage as decimal (1.0 = 100%%)"
     ),
     max_days: int = typer.Option(
         7, "--max-days", "-d", help="Maximum days between consecutive prices"
@@ -295,7 +295,9 @@ def _resolve_price_jobs(
     fill_gaps: bool,
 ) -> list:
     if update or fill_gaps:
-        return bp_price.get_price_jobs_up_to_date(entries, date_last=date_last, inactive=inactive)
+        return bp_price.get_price_jobs_up_to_date(
+            entries, date_last=date_last, inactive=inactive, fill_gaps=fill_gaps
+        )
     return bp_price.get_price_jobs_at_date(entries, date=None, inactive=inactive)
 
 
