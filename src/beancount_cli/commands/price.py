@@ -65,7 +65,7 @@ def price_check_anomalies(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
     threshold: float = typer.Option(
-        1.0, "--threshold", "-t", help="Minimum change percentage as decimal (1.0 = 100%)"
+        1.0, "--threshold", "-t", help="Minimum change percentage as decimal (1.0 = 100%%)"
     ),
     max_days: int = typer.Option(
         7, "--max-days", "-d", help="Maximum days between consecutive prices"
