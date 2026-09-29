@@ -1,6 +1,6 @@
 [project]
 name = "beancount-cli"
-version = "0.2.17"
+version = "0.3.0"
 description = "A CLI tool to manage Beancount ledgers"
 readme = "README.md"
 authors = [
