@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Upgraded `agentyper` to `0.1.21`.
+- Exit codes follow the CLI Agent Spec: validation errors (e.g. `check` finding ledger errors) now exit `2` instead of `3`, and a partial `price fetch` failure exits `3` instead of `2`.
+- `--format json` keeps list results as arrays: a query matching one item returns `"data": [{...}]` instead of a bare object.
+
 ## [0.2.17] - 2026-09-28
 
 ### Changed

@@ -11,6 +11,7 @@ import sys
 import textwrap
 from pathlib import Path
 
+import agentyper
 import fake_price_source
 import pytest
 from beanprice import price as bp_price
@@ -61,7 +62,7 @@ def _run_fetch(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
 def test_source_error_does_not_abort_other_jobs(tmp_path):
     result = _run_fetch(tmp_path)
 
-    assert result.returncode == 2, result.stderr  # PARTIAL_FAILURE
+    assert result.returncode == agentyper.ExitCode.PARTIAL_FAILURE, result.stderr
     assert "price GOOD" in result.stdout
     assert "Error fetching prices" not in result.stderr
     assert "Skipped 1 jobs with source errors: FAIL" in result.stderr
@@ -72,7 +73,7 @@ def test_source_error_does_not_abort_other_jobs(tmp_path):
 def test_update_writes_prices_despite_source_error(tmp_path):
     result = _run_fetch(tmp_path, "--update")
 
-    assert result.returncode == 2, result.stderr
+    assert result.returncode == agentyper.ExitCode.PARTIAL_FAILURE, result.stderr
     ledger_text = (tmp_path / "main.beancount").read_text()
     assert "price GOOD" in ledger_text
     assert "price FAIL" not in ledger_text
