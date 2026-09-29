@@ -47,13 +47,28 @@ If you are executing shell commands to help a human analyze or modify their `mai
    Each processed line emits a structured JSON result to stdout:
    ```json
    {"ok": true,  "exit_code": 0, "line": 1, "cmd": "account.create", "result": {...}}
-   {"ok": false, "exit_code": 5, "line": 2, "cmd": "transaction.add", "error": "..."}
+   {"ok": false, "exit_code": 2, "line": 2, "cmd": "transaction.add", "stderr": "..."}
    ```
+
+   Without `--ignore-errors`, `exec` stops at the first failing line and exits with that line's code. With it, every line runs and the run exits `3` if any line failed.
 
    **`transaction.add` example payload:**
    ```json
    {"_cmd": "transaction.add", "date": "2024-01-15", "narration": "Groceries", "payee": "Store", "postings": [{"account": "Expenses:Food", "units": {"number": 50, "currency": "USD"}}, {"account": "Assets:Cash", "units": {"number": -50, "currency": "USD"}}]}
    ```
+
+### Exit Codes
+
+Since v0.3.0 the exit codes follow the CLI Agent Spec. Branch on the exit code, not on stderr text:
+
+| Code | Meaning | Examples | What to do |
+|---|---|---|---|
+| `0` | Success | Any command that completed | Continue |
+| `1` | General or system error | Ledger file not found, unreadable file | Fix the environment (path, permissions); retrying unchanged will fail again |
+| `2` | Validation or argument error | Unknown flag or command, malformed `--date`, `check` finding ledger errors | Fix the input or the ledger and reissue |
+| `3` | Partial failure | `price fetch` where some sources failed (fetched prices are still written), `exec --ignore-errors` with a failed line | Read the output for which items failed; retry only those |
+
+Before v0.3.0, `2` and `3` were swapped: validation errors exited `3` and partial failures exited `2`. Check `uv run bean --version` if a script depends on them.
 
 ## 2. Adjusting an Account Balance (Pad + Balance)
 
