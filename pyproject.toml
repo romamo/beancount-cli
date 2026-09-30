@@ -7,7 +7,7 @@ authors = [
     { name = "Roman Medvedev", email = "pypi@romavm.dev" }
 ]
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "beancount==3.2.3",
     "beanquery>=0.1.0",
@@ -24,10 +24,8 @@ classifiers = [
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Office/Business :: Financial :: Accounting",
 ]
 
@@ -74,7 +72,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
