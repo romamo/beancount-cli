@@ -1,15 +1,15 @@
-import sys
 from datetime import date
 from pathlib import Path
 
 import agentyper as typer
 from beancount.core import data
 from beancount.parser import printer
+from rich.markup import escape
 
 from beancount_cli.adapters import to_core_balance, to_core_pad
 from beancount_cli.commands.common import (
     _is_table_format,
-    console,
+    emit,
     get_ledger_file,
 )
 from beancount_cli.models import AccountModel, BalanceModel, PadBalanceModel
@@ -73,14 +73,19 @@ def account_create(
 
     currencies = [c.strip() for c in currency_opt.split(",")] if currency_opt else []
     model = AccountModel(name=name, open_date=d, currencies=currencies)
+    entry = _format_open(model)
+    data = {**model.model_dump(mode="json"), "entry": entry}
     if dry_run:
-        sys.stdout.write(_format_open(model) + "\n")
-        return
+        return emit({**data, "file": None}, effect="would_create", human=escape(entry))
     try:
-        AccountService(get_ledger_file(file)).create_account(model, target_file=target)
+        written = AccountService(get_ledger_file(file)).create_account(model, target_file=target)
     except ValueError as e:
         typer.exit_error(str(e))
-    console.print(f"[green]Account {name} created.[/green]")
+    return emit(
+        {**data, "file": str(written)},
+        effect="created",
+        human=f"[green]Account {escape(name)} created in {escape(str(written))}.[/green]",
+    )
 
 
 @app.command(name="balance", mutating=True)
@@ -101,13 +106,17 @@ def account_balance(
         date=date,
         amount={"number": amount, "currency": currency},
     )
+    entry = printer.format_entry(to_core_balance(model))
+    data = {**model.model_dump(mode="json"), "entry": entry}
     if dry_run:
-        sys.stdout.write(printer.format_entry(to_core_balance(model)) + "\n")
-        return
-    actual_file = get_ledger_file(file)
-    service = AccountService(actual_file)
-    service.add_balance(model, target_file=target)
-    console.print(f"[green]Balance check for {model.account} added.[/green]")
+        return emit({**data, "file": None}, effect="would_create", human=escape(entry))
+    written = AccountService(get_ledger_file(file)).add_balance(model, target_file=target)
+    return emit(
+        {**data, "file": str(written)},
+        effect="created",
+        human=f"[green]Balance check for {escape(str(model.account))} added to "
+        f"{escape(str(written))}.[/green]",
+    )
 
 
 @app.command(name="pad-balance", mutating=True)
@@ -164,15 +173,15 @@ def account_pad_balance(
         pad_date=p_date,
     )
 
+    core_pad, core_balance = to_core_pad(model)
+    entry = printer.format_entry(core_pad) + "\n" + printer.format_entry(core_balance)
+    data = {**model.model_dump(mode="json"), "entry": entry}
     if dry_run:
-        core_pad, core_balance = to_core_pad(model)
-        sys.stdout.write(printer.format_entry(core_pad) + "\n")
-        sys.stdout.write(printer.format_entry(core_balance) + "\n")
-        return
-    actual_file = get_ledger_file(file)
-    service = AccountService(actual_file)
-    service.add_pad_balance(model, target_file=target)
-    console.print(
-        f"[green]Pad + Balance for {model.account} → {model.amount.number} "
-        f"{model.amount.currency} added.[/green]"
+        return emit({**data, "file": None}, effect="would_create", human=escape(entry))
+    written = AccountService(get_ledger_file(file)).add_pad_balance(model, target_file=target)
+    return emit(
+        {**data, "file": str(written)},
+        effect="created",
+        human=f"[green]Pad + Balance for {escape(str(model.account))} → {model.amount.number} "
+        f"{model.amount.currency} added to {escape(str(written))}.[/green]",
     )

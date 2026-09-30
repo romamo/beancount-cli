@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `check`, `format` and the mutating commands (`account create/balance/pad-balance`, `transaction add`, `commodity create/import`, `price fetch`) return a JSON envelope in `json`/`jsonl`/`csv` mode, including when piped. Mutating results carry `effect` (`created`, `updated`, `noop`, or `would_create`/`would_update` on a dry run), the written `file`, and the directive text as `entry`. Table/plain output keeps the human messages.
+- `format` is declared mutating (it rewrites the ledger), gains `--dry-run`, and reports `noop` when the file is already formatted.
+- `exec` now receives the results of mutating lines, including dry-run previews.
+
+### Fixed
+- `format` no longer leaks a temp file on failure, and a missing ledger or missing `bean-format` gives a structured error instead of a traceback.
+- `commodity create` for an existing commodity gives a structured error (exit 2) instead of a traceback.
+- `commodity import` parse errors are reported as a structured error on stderr instead of text on stdout.
+
 ## [0.3.1] - 2026-09-30
 
 ### Fixed

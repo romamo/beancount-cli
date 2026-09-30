@@ -240,15 +240,9 @@ class TransactionService:
 
         return [from_core_transaction(tx) for tx in filtered_txs]
 
-    def add_transaction(
-        self,
-        tx: TransactionModel,
-        draft: bool = False,
-        print_only: bool = False,
-        target_file: Path | None = None,
-    ) -> None:
+    def render_transaction(self, tx: TransactionModel, draft: bool = False) -> str:
         """
-        Add a transaction to the ledger.
+        Validate a transaction and return its beancount text without writing it.
         """
         if draft:
             tx.flag = "!"
@@ -264,13 +258,25 @@ class TransactionService:
             else:
                 print(f"Warning: {error_msg}", file=sys.stderr)
 
-        core_tx = to_core_transaction(tx)
-        entry_str = printer.format_entry(core_tx)
+        return printer.format_entry(to_core_transaction(tx))
 
-        if print_only:
-            print(entry_str)
-            return
+    def add_transaction(
+        self,
+        tx: TransactionModel,
+        draft: bool = False,
+        target_file: Path | None = None,
+    ) -> Path:
+        """
+        Add a transaction to the ledger and return the file it was written to.
+        """
+        return self.write_transaction(tx, self.render_transaction(tx, draft=draft), target_file)
 
+    def write_transaction(
+        self, tx: TransactionModel, entry_str: str, target_file: Path | None = None
+    ) -> Path:
+        """
+        Write already-rendered transaction text and return the file it was written to.
+        """
         # Check for configured inbox
         inbox_file_str = self.ledger_service.get_custom_config("new_transaction_file")
         actual_target = target_file or self.ledger_file
@@ -316,8 +322,7 @@ class TransactionService:
                     if mode == "a":
                         f.write("\n")
                     f.write(entry_str)
-                print(f"Transaction appended to {actual_target}")
-                return
+                return actual_target
             else:
                 # Directory mode
                 target_path.mkdir(parents=True, exist_ok=True)
@@ -327,12 +332,11 @@ class TransactionService:
 
                 with open(actual_target, "w") as f:
                     f.write(entry_str)
-                print(f"Transaction created in {actual_target}")
-                return
+                return actual_target
 
         with open(actual_target, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Transaction appended to {actual_target}")
+        return actual_target
 
 
 class MapService:
@@ -664,7 +668,7 @@ class AccountService:
                 )
         return sorted(accounts, key=lambda a: a.name)
 
-    def create_account(self, account: AccountModel, target_file: Path | None = None) -> None:
+    def create_account(self, account: AccountModel, target_file: Path | None = None) -> Path:
         """
         Create a new account by appending an Open directive.
         """
@@ -695,9 +699,9 @@ class AccountService:
 
         with open(actual_target, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Account created in {actual_target}")
+        return actual_target
 
-    def add_balance(self, balance: BalanceModel, target_file: Path | None = None) -> None:
+    def add_balance(self, balance: BalanceModel, target_file: Path | None = None) -> Path:
         """
         Add a Balance directive to the ledger.
         """
@@ -713,9 +717,9 @@ class AccountService:
 
         with open(actual_target, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Balance check added to {actual_target}")
+        return actual_target
 
-    def add_pad_balance(self, model: PadBalanceModel, target_file: Path | None = None) -> None:
+    def add_pad_balance(self, model: PadBalanceModel, target_file: Path | None = None) -> Path:
         """
         Append a Pad + Balance directive pair to the ledger.
 
@@ -737,9 +741,7 @@ class AccountService:
         with open(actual_target, "a") as f:
             f.write("\n" + pad_str)
             f.write("\n" + balance_str)
-        print(
-            f"Pad ({core_pad.date}) + Balance ({core_balance.date}) directives added to {actual_target}"
-        )
+        return actual_target
 
 
 class CommodityService:
@@ -778,7 +780,7 @@ class CommodityService:
         currency: CurrencyCode.Input,
         name: str | None = None,
         meta: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> Path:
         """
         Create a Commodity directive.
         """
@@ -806,7 +808,7 @@ class CommodityService:
 
         with open(target_file, "a") as f:
             f.write("\n" + entry_str)
-        print(f"Commodity created in {target_file}")
+        return target_file
 
     def import_commodities(
         self,

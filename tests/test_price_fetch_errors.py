@@ -5,6 +5,7 @@ the remaining jobs are fetched and written, and the run exits with
 PARTIAL_FAILURE.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -63,7 +64,10 @@ def test_source_error_does_not_abort_other_jobs(tmp_path):
     result = _run_fetch(tmp_path)
 
     assert result.returncode == agentyper.ExitCode.PARTIAL_FAILURE, result.stderr
-    assert "price GOOD" in result.stdout
+    data = json.loads(result.stdout)["data"]
+    assert [p["currency"] for p in data["prices"]] == ["GOOD"]
+    assert [e["job"] for e in data["errors"]] == ["FAIL on latest"]
+    assert data["no_data"] == ["NONE on latest"]
     assert "Error fetching prices" not in result.stderr
     assert "Skipped 1 jobs with source errors: FAIL" in result.stderr
     assert "connection reset by peer" in result.stderr

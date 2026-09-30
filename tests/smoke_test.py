@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import tempfile
@@ -54,7 +55,7 @@ def test_smoke():
             check=False,
         )
         assert result.returncode == 0
-        assert "No errors found" in result.stdout
+        assert json.loads(result.stdout)["data"]["valid"] is True
     finally:
         if temp_path.exists():
             temp_path.unlink()

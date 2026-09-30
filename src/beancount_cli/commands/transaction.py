@@ -2,8 +2,9 @@ import json
 from pathlib import Path
 
 import agentyper as typer
+from rich.markup import escape
 
-from beancount_cli.commands.common import _is_table_format, get_ledger_file
+from beancount_cli.commands.common import _is_table_format, emit, get_ledger_file
 from beancount_cli.models import TransactionModel
 from beancount_cli.services import TransactionService
 
@@ -70,6 +71,13 @@ def tx_add(
         links=set(json.loads(links)),
     )
     service = TransactionService(get_ledger_file(file))
-    service.add_transaction(
-        model, draft=draft, print_only=print_only or dry_run, target_file=target
+    entry = service.render_transaction(model, draft=draft)
+    data = {**model.model_dump(mode="json"), "entry": entry}
+    if print_only or dry_run:
+        return emit({**data, "file": None}, effect="would_create", human=escape(entry))
+    written = service.write_transaction(model, entry, target_file=target)
+    return emit(
+        {**data, "file": str(written)},
+        effect="created",
+        human=f"[green]Transaction added to {escape(str(written))}.[/green]",
     )

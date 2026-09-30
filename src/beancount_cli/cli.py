@@ -22,7 +22,7 @@ app.add_typer(acc_app, name="account")
 app.add_typer(comm_app, name="commodity")
 app.command(name="check")(check)
 app.command(name="tree")(tree)
-app.command(name="format")(format_cmd)
+app.command(name="format", mutating=True)(format_cmd)
 
 app.add_typer(price_app, name="price")
 
