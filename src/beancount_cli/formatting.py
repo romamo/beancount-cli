@@ -123,7 +123,7 @@ class Tree:
         self.label = label
         self.children: list[Tree] = []
 
-    def add(self, label: str) -> "Tree":
+    def add(self, label: str) -> Tree:
         t = Tree(label)
         self.children.append(t)
         return t

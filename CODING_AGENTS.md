@@ -4,7 +4,7 @@ If you are an AI agent analyzing, refactoring, or editing the Beancount CLI Pyth
 
 ### 1. Environment & Execution
 - **Command Runner**: Always use `uv run` instead of `python` or `poetry` to execute commands.
-- **Python Version**: Prefer to use Python 3.10. (Latest Python release is 3.14).
+- **Python Version**: Python 3.14 is required (`requires-python = ">=3.14"`); use 3.14 language features freely.
 - **Temporary Files**: Always use a `tmp` folder in the current working directory for all temporary files.
 
 ### 2. Code Quality & Exception Handling

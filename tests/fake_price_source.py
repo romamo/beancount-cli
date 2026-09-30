@@ -22,7 +22,7 @@ class Source(source.Source):
     def _price(self, ticker: str) -> source.SourcePrice | None:
         match ticker:
             case "OK":
-                now = datetime.datetime.now(datetime.timezone.utc)
+                now = datetime.datetime.now(datetime.UTC)
                 return source.SourcePrice(Decimal("1.5"), now, "USD")
             case "NODATA":
                 return None

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Requires Python 3.14 or newer** (was 3.10). pip and uv refuse to install on older interpreters; stay on beancount-cli 0.4.0 there. This prepares the move to treaty, which is 3.14-only.
+- CI and the publish workflow run on Python 3.14; `.python-version` pins 3.14 for local development.
+
 ## [0.4.0] - 2026-09-30
 
 ### Changed

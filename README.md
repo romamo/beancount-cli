@@ -25,7 +25,7 @@ A robust command-line interface and Python library for programmatically managing
 
 ## Installation
 
-Install using `uv` or `pip`:
+Requires Python 3.14 or newer. Install using `uv` or `pip`:
 
 ```bash
 uv pip install beancount-cli
