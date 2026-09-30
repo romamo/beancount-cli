@@ -79,7 +79,7 @@ def tree(
     if _is_table_format():
         console.print(root)
     else:
-        typer.output(tree_dict, title="File Tree")
+        typer.output({str(actual_file): tree_dict}, title="File Tree")
 
 
 def format_cmd(
