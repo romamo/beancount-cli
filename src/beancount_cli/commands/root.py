@@ -1,12 +1,15 @@
 import json
+import shutil
 import subprocess  # nosec B404
 import sys
+import tempfile
 from pathlib import Path
 
 import agentyper as typer
+from rich.markup import escape
 from rich.tree import Tree
 
-from beancount_cli.commands.common import _is_table_format, console, get_ledger_file
+from beancount_cli.commands.common import _is_table_format, console, emit, get_ledger_file
 from beancount_cli.services import LedgerService, MapService
 
 
@@ -31,8 +34,10 @@ def check(
         typer.exit_error(str(exc), code=typer.EXIT_SYSTEM, error_type="OSError", format_=format_)
 
     if not service.errors:
-        console.print("[green]No errors found.[/green]")
-        return
+        if format_ == "table":
+            console.print("[green]No errors found.[/green]")
+            return None
+        return {"file": str(actual_file), "valid": True, "errors": []}
 
     if format_ == "json":
         payload = {
@@ -88,22 +93,49 @@ def format_cmd(
         None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
     ),
     recursive: bool = typer.Option(False, "--recursive", "-r", help="Format all included files"),
+    dry_run: bool = False,
 ):
     """Format ledger file(s)."""
     actual_file = get_ledger_file(ledger_file or file)
+    if not actual_file.is_file():
+        typer.exit_error(
+            f"Ledger file not found: {actual_file}",
+            code=typer.EXIT_SYSTEM,
+            error_type="FileNotFoundError",
+            field="file",
+        )
+    if shutil.which("bean-format") is None:
+        typer.exit_error(
+            "bean-format is not on PATH",
+            code=typer.EXIT_SYSTEM,
+            error_type="DependencyMissing",
+            hint="Install beancount, which provides bean-format, into the active environment",
+        )
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".beancount", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
     try:
-        import shutil
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
-            tmp_path = Path(tmp.name)
-
         cmd = ["bean-format", "-c", "50", "-o", str(tmp_path), str(actual_file)]
-        subprocess.run(cmd, check=True, capture_output=True, text=True)  # nosec B603
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)  # nosec B603
+        except subprocess.CalledProcessError as e:
+            typer.exit_error(
+                f"bean-format failed: {e.stderr.strip()}",
+                code=typer.EXIT_SYSTEM,
+                error_type="FormatError",
+            )
+        formatted = tmp_path.read_text()
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
-        shutil.move(str(tmp_path), str(actual_file))
-        console.print(f"[green]Formatted {actual_file}[/green]")
+    changed = formatted != actual_file.read_text()
+    if changed and not dry_run:
+        actual_file.write_text(formatted)
 
-    except subprocess.CalledProcessError as e:
-        console.print(f"[red]Error running bean-format: {e.stderr}[/red]")
-        sys.exit(typer.EXIT_SYSTEM)
+    if not changed:
+        effect, human = "noop", f"[green]{escape(str(actual_file))} is already formatted.[/green]"
+    elif dry_run:
+        effect, human = "would_update", f"[yellow]Would format {escape(str(actual_file))}.[/yellow]"
+    else:
+        effect, human = "updated", f"[green]Formatted {escape(str(actual_file))}[/green]"
+    return emit({"file": str(actual_file), "changed": changed}, effect=effect, human=human)

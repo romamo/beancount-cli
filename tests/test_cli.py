@@ -20,6 +20,11 @@ def run_cli(*args):
 def test_check_command(temp_beancount_file):
     code, out, err = run_cli("check", str(temp_beancount_file))
     assert code in (0, None)
+    data = json.loads(out)["data"]
+    assert data == {"file": str(temp_beancount_file), "valid": True, "errors": []}
+
+    code, out, err = run_cli("check", str(temp_beancount_file), "-o", "table")
+    assert code in (0, None)
     assert "No errors found" in out
 
 
@@ -89,7 +94,11 @@ def test_account_create(temp_beancount_file):
         "USD",
     )
     assert code in (0, None)
-    assert "created" in out
+    data = json.loads(out)["data"]
+    assert data["effect"] == "created"
+    assert data["name"] == "Liabilities:CreditCard"
+    assert data["file"] == str(temp_beancount_file)
+    assert "open Liabilities:CreditCard" in data["entry"]
 
 
 def test_commodity_create(temp_beancount_file):
@@ -97,7 +106,10 @@ def test_commodity_create(temp_beancount_file):
         "commodity", "create", "ETH", "--file", str(temp_beancount_file), "--name", "Ethereum"
     )
     assert code in (0, None)
-    assert "created" in out
+    data = json.loads(out)["data"]
+    assert data["effect"] == "created"
+    assert data["currency"] == "ETH"
+    assert data["meta"] == {"name": "Ethereum"}
 
 
 def test_tree_command(temp_beancount_file):
@@ -208,7 +220,9 @@ def test_format_cmd(temp_beancount_file, monkeypatch):
     monkeypatch.setattr(subprocess, "run", mock_run)
     code, out, err = run_cli("format", str(temp_beancount_file))
     assert code in (0, None)
-    assert "Formatted" in out
+    data = json.loads(out)["data"]
+    assert data == {"effect": "updated", "file": str(temp_beancount_file), "changed": True}
+    assert temp_beancount_file.read_text() == "; formatted content\n"
 
 
 def test_price_cmd(temp_beancount_file):

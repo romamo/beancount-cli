@@ -139,6 +139,8 @@ def price_fetch(
 
     label = ", ".join(str(f) for f in files_to_load)
     error_console.print(f"Fetching prices for {label}...", highlight=False)
+    structured = not _is_table_format()
+    target_price_file: Path | None = None
 
     errored_jobs: list[tuple[bp_price.DatedPrice, str]] = []
     try:
@@ -179,13 +181,20 @@ def price_fetch(
 
         if not jobs:
             error_console.print("[yellow]No price jobs to execute.[/yellow]")
-            return
+            if structured:
+                return typer.result({"prices": [], "file": None, "jobs": 0}, effect="noop")
+            return None
 
         if dry_run:
             error_console.print(f"[blue]Dry run: {len(jobs)} jobs generated.[/blue]")
             for job in jobs:
                 error_console.print(f"  {bp_price.format_dated_price_str(job)}")
-            return
+            if structured:
+                return typer.result(
+                    {"jobs": [bp_price.format_dated_price_str(job) for job in jobs]},
+                    effect="would_create",
+                )
+            return None
 
         new_price_entries = []
         # Build a set of existing (date, currency) for fast redundancy check
@@ -209,8 +218,9 @@ def price_fetch(
                     if (price_entry.date, price_entry.currency) not in existing_prices:
                         new_price_entries.append(price_entry)
                         existing_prices.add((price_entry.date, price_entry.currency))
-                        print(printer.format_entry(price_entry), end="")
-                        sys.stdout.flush()
+                        if not structured:
+                            print(printer.format_entry(price_entry), end="")
+                            sys.stdout.flush()
                     else:
                         redundant_count += 1
                         logging.debug("Redundant: %s", printer.format_entry(price_entry).strip())
@@ -237,7 +247,6 @@ def price_fetch(
             # 3. Search the include tree for a file with 'price' in the name.
             # 4. Fallback to the primary ledger.
 
-            target_price_file = None
             for f in files_to_load:
                 if f.name == "prices.beancount":
                     target_price_file = f
@@ -289,8 +298,31 @@ def price_fetch(
         error_console.print(f"[red]Error fetching prices: {e}[/red]")
         sys.exit(typer.EXIT_SYSTEM)
 
+    summary = typer.result(
+        {
+            "prices": [_price_to_dict(p) for p in new_price_entries],
+            "file": str(target_price_file) if target_price_file else None,
+            "written": len(filtered_prices),
+            "redundant": redundant_count,
+            "no_data": [_describe_job(j) for j in failed_jobs],
+            "errors": [{"job": _describe_job(j), "error": e} for j, e in errored_jobs],
+        },
+        effect="created" if filtered_prices else "noop",
+    )
     if errored_jobs:
+        if structured:
+            typer.output(summary)
         sys.exit(typer.ExitCode.PARTIAL_FAILURE)
+    return summary if structured else None
+
+
+def _price_to_dict(p: data.Price) -> dict[str, str]:
+    return {
+        "date": p.date.isoformat(),
+        "currency": p.currency,
+        "number": str(p.amount.number),
+        "quote": p.amount.currency,
+    }
 
 
 def _fetch_price_job(job: bp_price.DatedPrice) -> tuple[data.Price | None, str | None]:

@@ -2,6 +2,7 @@ import os
 import sys
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
@@ -60,6 +61,21 @@ def _is_table_format() -> bool:
     import agentyper as typer
 
     return typer.get_current_context().format not in _STRUCTURED_FORMATS
+
+
+def emit(data: dict[str, Any], *, effect: str, human: str) -> dict[str, Any] | None:
+    """Report a command's outcome: ``human`` text for people, an envelope for programs.
+
+    In table/plain mode ``human`` (Rich markup) is printed and nothing is returned. In
+    json/jsonl/csv mode the ``effect``-tagged ``data`` is returned for agentyper to render
+    as the response envelope, which also lets ``--idempotency-key`` and ``exec`` see it.
+    """
+    import agentyper as typer
+
+    if _is_table_format():
+        console.print(human, highlight=False)
+        return None
+    return typer.result(data, effect=effect)
 
 
 def print_balances_table(balances, title) -> None:
