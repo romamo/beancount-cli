@@ -107,11 +107,15 @@ def test_tree_command(temp_beancount_file):
 
 
 def test_report_aliases(temp_beancount_file):
-    code, out, err = run_cli("report", "balance-sheet", "--file", str(temp_beancount_file))
+    code, out, err = run_cli(
+        "report", "balance-sheet", "--file", str(temp_beancount_file), "-o", "table"
+    )
     assert code in (0, None)
     assert "Balance Sheet" in out
 
-    code, out, err = run_cli("report", "trial-balance", "--file", str(temp_beancount_file))
+    code, out, err = run_cli(
+        "report", "trial-balance", "--file", str(temp_beancount_file), "-o", "table"
+    )
     assert code in (0, None)
     assert "Trial Balance" in out
 
@@ -121,7 +125,9 @@ def test_report_aliases(temp_beancount_file):
 
 
 def test_report_holdings(temp_beancount_file):
-    code, out, err = run_cli("report", "holdings", "--file", str(temp_beancount_file))
+    code, out, err = run_cli(
+        "report", "holdings", "--file", str(temp_beancount_file), "-o", "table"
+    )
     assert code in (0, None)
     assert "Holdings" in out
 
@@ -150,7 +156,9 @@ def test_report_audit(tmp_path):
         )
     )
     # Test all transactions (older to newest)
-    code, out, err = run_cli("report", "audit", "--file", str(path), "--currency", "USD", "--all")
+    code, out, err = run_cli(
+        "report", "audit", "--file", str(path), "--currency", "USD", "--all", "-o", "table"
+    )
     assert code in (0, None)
     assert "Audit Report: USD" in out
     lines = [line for line in out.splitlines() if "Store" in line]
@@ -161,7 +169,7 @@ def test_report_audit(tmp_path):
 
     # Test limit (should show LAST 2 transactions in chronological order: Middle -> Newest)
     code, out, err = run_cli(
-        "report", "audit", "--file", str(path), "--currency", "USD", "--limit", "2"
+        "report", "audit", "--file", str(path), "--currency", "USD", "--limit", "2", "-o", "table"
     )
     assert code in (0, None)
     lines = [line for line in out.splitlines() if "Store" in line]
@@ -235,3 +243,21 @@ def test_report_audit_help_shows_audit_only_flags():
     assert code in (0, None)
     assert "--limit" in (out + err)
     assert "--all" in (out + err)
+
+
+def test_output_json_returns_model_fields(temp_beancount_file):
+    """--output json, -o json, --json and --format json must all give the same data."""
+    variants = (["--output", "json"], ["-o", "json"], ["--json"], ["--format", "json"])
+    results = []
+    for flags in variants:
+        code, out, err = run_cli("account", "list", "--file", str(temp_beancount_file), *flags)
+        assert code in (0, None), err
+        results.append(json.loads(out)["data"])
+    assert all(r == results[0] for r in results)
+    assert {"name", "open_date"} <= set(results[0][0])
+
+
+def test_non_tty_default_is_structured_json(temp_beancount_file):
+    code, out, err = run_cli("report", "balance-sheet", "--file", str(temp_beancount_file))
+    assert code in (0, None), err
+    assert json.loads(out)["ok"] is True

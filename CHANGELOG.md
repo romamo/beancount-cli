@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `--output json`, `-o json`, `--json`, the non-TTY default, and `exec` now return the same structured data as `--format json` (model fields such as `open_date`) instead of table rows (`Open Date`). Only the hidden `--format` flag used to count.
+- `report *`, `commodity check`, `price check` and `tree` print a JSON envelope when stdout is not a terminal, as `--help` documents; pass `-o table` for the table.
+- `tree` JSON output includes the root ledger file.
+
 ## [0.3.0] - 2026-09-29
 
 ### Changed

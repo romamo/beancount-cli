@@ -48,17 +48,18 @@ def get_ledger_file(override: str | Path | None = None) -> Path:
     return Path("main.beancount")
 
 
+_STRUCTURED_FORMATS = frozenset({"json", "jsonl", "csv"})
+
+
 def _is_table_format() -> bool:
-    if "--format" in sys.argv:
-        idx = sys.argv.index("--format")
-        if idx + 1 < len(sys.argv) and sys.argv[idx + 1] in ("json", "csv"):
-            return False
-    for arg in sys.argv:
-        if arg.startswith("--format="):
-            val = arg.split("=")[1]
-            if val in ("json", "csv"):
-                return False
-    return True
+    """True when the active output format is for people rather than programs.
+
+    Reads the format agentyper resolved for this invocation, so ``--output``/``-o``,
+    ``--json``, ``--format``, the non-TTY default, and ``exec`` lines all agree.
+    """
+    import agentyper as typer
+
+    return typer.get_current_context().format not in _STRUCTURED_FORMATS
 
 
 def print_balances_table(balances, title) -> None:
