@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Requires Python 3.14 or newer** (was 3.10). pip and uv refuse to install on older interpreters; stay on beancount-cli 0.4.0 there. This prepares the move to treaty, which is 3.14-only.
 - CI and the publish workflow run on Python 3.14; `.python-version` pins 3.14 for local development.
+- Requires agentyper 0.1.22+ (was pinned to exactly 0.1.21), so beancount-cli installs alongside tools that need 0.1.22, such as ibkr-converter. Under `--format json`, errors raised through agentyper (e.g. `check` on a missing ledger) are now a failure envelope on stdout (`{"ok": false, "error": {...}}`) with a one-line `Error: ...` on stderr, instead of an `{"error": true, ...}` object on stderr.
 
 ## [0.4.0] - 2026-09-30
 

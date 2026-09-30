@@ -78,9 +78,13 @@ def test_check_missing_file_exits_system(tmp_path):
 def test_check_missing_file_json(tmp_path):
     code, out, err = _run_cli("check", "--format", "json", str(tmp_path / "nope.beancount"))
     assert code == 1
-    payload = jsonlib.loads(err)
-    assert payload["exit_code"] == 1
-    assert payload["error_type"] == "FileNotFoundError"
+    # agentyper 0.1.22+: the failure envelope goes to stdout, a one-line summary to stderr
+    payload = jsonlib.loads(out)
+    assert payload["ok"] is False
+    assert payload["data"] is None
+    assert payload["error"]["exit_code"] == 1
+    assert payload["error"]["type"] == "FileNotFoundError"
+    assert err.startswith("Error: Ledger file not found")
     assert "Traceback" not in err
 
 
