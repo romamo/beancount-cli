@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.1] - 2026-09-30
 
 ### Fixed
 - `--output json`, `-o json`, `--json`, the non-TTY default, and `exec` now return the same structured data as `--format json` (model fields such as `open_date`) instead of table rows (`Open Date`). Only the hidden `--format` flag used to count.
