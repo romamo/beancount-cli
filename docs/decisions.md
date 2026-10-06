@@ -11,3 +11,11 @@ entry that supersedes it, never by editing an old one.
 - Why: Fail fast: a fallback such as writing to the raw new_transaction_file pattern creates files the user never meant, and an agent only sees effect created
 - Applies to: src/beancount_cli/services.py, ledger custom options, exit codes
 - Enforced by: review
+
+## D-2: An explicit --target beats ledger config
+
+- Decided: 2026-10-06, in romamo/beancount-cli#37
+- Rule: When a write command gets --target, it writes there even if the ledger sets new_transaction_file; the ledger option is still read and a malformed one still refuses with LEDGER_INVALID (D-1)
+- Why: The caller named that file; silently writing elsewhere surprises an agent that only checks effect created
+- Applies to: src/beancount_cli/services.py, src/beancount_cli/commands/transaction.py, --target, new_transaction_file
+- Enforced by: review, regression test
