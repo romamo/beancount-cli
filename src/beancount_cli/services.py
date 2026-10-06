@@ -1,5 +1,5 @@
 import re
-import sys
+import string
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -291,72 +291,121 @@ class TransactionService:
         rendered = self.render_transaction(tx, draft=draft)
         return self.write_transaction(tx, rendered.entry, target_file)
 
+    def inbox_path(self, tx: TransactionModel) -> Path | None:
+        """
+        Resolve the ledger's new_transaction_file pattern for this transaction.
+
+        Returns None when the option is not set. A path with a suffix is a file to append to;
+        one without is a directory that gets one file per transaction. Raises
+        InvalidLedgerOptionError when the pattern does not format.
+        """
+        pattern = self.ledger_service.get_custom_config("new_transaction_file")
+        if not pattern:
+            return None
+        placeholders = {
+            "year": tx.date.year,
+            "month": f"{tx.date.month:02d}",
+            "day": f"{tx.date.day:02d}",
+            "payee": _path_safe(tx.payee or "unknown"),
+            "slug": _slug(tx),
+        }
+        formatted = _format_option(NEW_TRANSACTION_FILE, pattern, placeholders)
+        return (self.ledger_file.parent / formatted).resolve()
+
     def write_transaction(
         self, tx: TransactionModel, entry_str: str, target_file: Path | None = None
     ) -> Path:
         """
         Write already-rendered transaction text and return the file it was written to.
         """
-        # Check for configured inbox
-        inbox_file_str = self.ledger_service.get_custom_config("new_transaction_file")
-        actual_target = target_file or self.ledger_file
+        target_path = self.inbox_path(tx)
+        if target_path is None:
+            actual_target = target_file or self.ledger_file
+            with open(actual_target, "a") as f:
+                f.write("\n" + entry_str)
+            return actual_target
 
-        if inbox_file_str:
-            # Resolve relative to ledger file
-            # Format pattern with transaction data
-            # variables: {year}, {month}, {day}, {slug}, {payee}
-            from datetime import datetime
+        if target_path.suffix:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            mode = "a" if target_path.exists() else "w"
+            with open(target_path, mode) as f:
+                if mode == "a":
+                    f.write("\n")
+                f.write(entry_str)
+            return target_path
 
-            # Use transaction date if available, else today
-            tx_date = tx.date
+        # Directory mode: one file per transaction
+        from datetime import datetime
 
-            placeholders = {
-                "year": tx_date.year,
-                "month": f"{tx_date.month:02d}",
-                "day": f"{tx_date.day:02d}",
-                "payee": "".join(c for c in (tx.payee or "unknown") if c.isalnum() or c in "_-"),
-                "slug": "".join(
-                    c for c in (tx.payee or tx.narration or "tx") if c.isalnum() or c in "_-"
-                ),
-            }
-
-            try:
-                formatted_path = inbox_file_str.format(**placeholders)
-            except KeyError as e:
-                # Fallback if unknown placeholder
-                print(
-                    f"Warning: Unknown placeholder {e} in new_transaction_file config. "
-                    "Using raw string.",
-                    file=sys.stderr,
-                )
-                formatted_path = inbox_file_str
-
-            target_path = (self.ledger_file.parent / formatted_path).resolve()
-            actual_target = target_path
-            if target_path.suffix:
-                # Ensure parent dirs exist
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                # Append mode for existing file or new file
-                mode = "a" if actual_target.exists() else "w"
-                with open(actual_target, mode) as f:
-                    if mode == "a":
-                        f.write("\n")
-                    f.write(entry_str)
-                return actual_target
-            else:
-                # Directory mode
-                target_path.mkdir(parents=True, exist_ok=True)
-                timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")[:19]
-                filename = f"{timestamp}_{placeholders['slug']}.beancount"
-                actual_target = target_path / filename
-
-                with open(actual_target, "w") as f:
-                    f.write(entry_str)
-                return actual_target
-
-        with open(actual_target, "a") as f:
-            f.write("\n" + entry_str)
+        target_path.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")[:19]
+        actual_target = target_path / f"{timestamp}_{_slug(tx)}.beancount"
+        with open(actual_target, "w") as f:
+            f.write(entry_str)
         return actual_target
+
+
+NEW_TRANSACTION_FILE = "new_transaction_file"
+
+
+class InvalidLedgerOptionError(ValueError):
+    """A ledger option the CLI reads (custom "ledger" config) is malformed."""
+
+    def __init__(
+        self,
+        option: str,
+        value: str,
+        reason: str,
+        placeholder: str | None = None,
+        known: tuple[str, ...] = (),
+    ):
+        self.option = option
+        self.value = value
+        self.reason = reason
+        self.placeholder = placeholder
+        self.known = known
+        super().__init__(f"Ledger option {option} {value!r}: {reason}")
+
+
+def _path_safe(text: str) -> str:
+    return "".join(c for c in text if c.isalnum() or c in "_-")
+
+
+def _slug(tx: TransactionModel) -> str:
+    return _path_safe(tx.payee or tx.narration or "tx")
+
+
+def _format_option(option: str, pattern: str, placeholders: dict[str, object]) -> str:
+    """Format a ledger option's pattern, refusing anything but the known named placeholders."""
+    known = tuple(placeholders)
+    try:
+        fields = [
+            field for _, field, _, _ in string.Formatter().parse(pattern) if field is not None
+        ]
+    except ValueError as e:
+        raise InvalidLedgerOptionError(
+            option, pattern, f"malformed pattern ({e})", known=known
+        ) from e
+    for field in fields:
+        if field not in placeholders:
+            reason = (
+                "positional placeholder {} is not supported"
+                if field == "" or field.isdigit()
+                else f"unknown placeholder {{{field}}}"
+            )
+            raise InvalidLedgerOptionError(option, pattern, reason, placeholder=field, known=known)
+    try:
+        return pattern.format(**placeholders)
+    except KeyError as e:
+        # A placeholder nested in a format spec, such as {year:{width}}
+        field = str(e.args[0])
+        raise InvalidLedgerOptionError(
+            option, pattern, f"unknown placeholder {{{field}}}", placeholder=field, known=known
+        ) from e
+    except ValueError as e:
+        raise InvalidLedgerOptionError(
+            option, pattern, f"malformed pattern ({e})", known=known
+        ) from e
 
 
 class MapService:

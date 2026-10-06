@@ -261,7 +261,7 @@ You can use placeholders to route transactions to dynamic paths:
 ```beancount
 2023-01-01 custom "ledger" "new_transaction_file" "{year}/{month}/txs.beancount"
 ```
-Supported placeholders: `{year}`, `{month}`, `{day}`, `{payee}`, `{slug}`.
+Supported placeholders: `{year}`, `{month}`, `{day}`, `{payee}`, `{slug}`. Any other placeholder, a positional `{}`, or an unmatched brace makes `transaction add` exit `80` (`LEDGER_INVALID`) without writing anything.
 
 **Directory Mode (One file per transaction):**
 If `new_transaction_file` points to a **directory**, `bean` will create a new file for each transaction inside that directory, named with an ISO timestamp.

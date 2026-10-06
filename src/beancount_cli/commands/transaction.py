@@ -25,7 +25,7 @@ from beancount_cli.models import (
     RegexPattern,
     TransactionModel,
 )
-from beancount_cli.services import TransactionService
+from beancount_cli.services import InvalidLedgerOptionError, TransactionService
 
 transaction = app.group("transaction", description="Manage transactions")
 
@@ -140,7 +140,7 @@ def render_written(data: Mapping[str, Any]) -> str:
     "add",
     description="Add a transaction",
     danger_level="mutating",
-    exit_codes=["NOT_FOUND", "TRANSACTION_INVALID"],
+    exit_codes=["NOT_FOUND", "LEDGER_INVALID", "TRANSACTION_INVALID"],
     supports_raw_payload=True,
     examples=[
         (
@@ -172,6 +172,20 @@ def tx_add(args: AddArgs, ctx: Ctx) -> TransactionWritten:
 
     fields = model.model_dump()
     target = target_path(args.target)
+    try:
+        service.inbox_path(model)
+    except InvalidLedgerOptionError as e:
+        known = ", ".join(f"{{{name}}}" for name in e.known)
+        raise Exit.LEDGER_INVALID(
+            str(e),
+            context={
+                "option": e.option,
+                "value": e.value,
+                "placeholder": e.placeholder,
+                "known": list(e.known),
+            },
+            suggestion=f'use only {known} in custom "ledger" "{e.option}"',
+        ) from e
     if args.dry_run:
         return TransactionWritten(**fields, effect="would_create", file=None, entry=entry)
     written = service.write_transaction(model, entry, target_file=target)

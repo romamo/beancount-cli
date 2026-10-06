@@ -62,7 +62,7 @@ Branch on the exit code or `error.code`, not on message text. Every command list
 | `3` | `PARTIAL_FAILURE` | `price fetch` where some sources failed; the fetched prices are still written and in `data` | Retry only the jobs in `data.errors` |
 | `5` | `NOT_FOUND` | Ledger file, account, or `commodities_file` does not exist | Fix the path or create the account |
 | `6` | `ALREADY_EXISTS` (manifest name `CONFLICT`) | `account create` or `commodity create` for one that exists; `data` names the existing account or commodity | Nothing to do; it exists |
-| `80` | `LEDGER_INVALID` | `check` found ledger errors; `error.context.errors` lists them | Fix the ledger |
+| `80` | `LEDGER_INVALID` | `check` found ledger errors (`error.context.errors` lists them), or `transaction add` found a malformed `new_transaction_file` pattern (`error.context` names the `option`, the `placeholder`, and the `known` ones) | Fix the ledger |
 | `81` | `TRANSACTION_INVALID` | `transaction add` names an account that is not open or an undeclared currency, or its postings do not balance | Open the account, declare the commodity, or fix the amounts |
 | `82` | `QUERY_INVALID` | `transaction list --where` with BQL that fails | Fix the query |
 | `83` | `CURRENCY_REQUIRED` | `report audit` without `--currency` on a ledger with no operating currency | Pass `--currency` |
