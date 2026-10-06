@@ -60,7 +60,7 @@ Branch on the exit code or `error.code`, not on message text. Every command list
 | `1` | e.g. `GENERAL_ERROR` | Unexpected failure | Inspect the error; retrying unchanged will likely fail again |
 | `2` | `ARG_ERROR` | Bad or missing argument, unknown flag or command; `error.errors` lists each problem with its `field` | Fix the input and reissue |
 | `3` | `PARTIAL_FAILURE` | `price fetch` where some sources failed; the fetched prices are still written and in `data` | Retry only the jobs in `data.errors` |
-| `5` | `NOT_FOUND` | Ledger file, account, or `commodities_file` does not exist | Fix the path or create the account |
+| `5` | `NOT_FOUND` | Ledger file, account, `commodities_file`, or the directory of `--target`/`--output-file` does not exist | Fix the path or create the account |
 | `6` | `ALREADY_EXISTS` (manifest name `CONFLICT`) | `account create` or `commodity create` for one that exists; `data` names the existing account or commodity | Nothing to do; it exists |
 | `80` | `LEDGER_INVALID` | `check` found ledger errors (`error.context.errors` lists them), or `transaction add` found a malformed `new_transaction_file` pattern (`error.context` names the `option`, the `placeholder`, and the `known` ones) | Fix the ledger |
 | `81` | `TRANSACTION_INVALID` | `transaction add` names an account that is not open or an undeclared currency, or its postings do not balance | Open the account, declare the commodity, or fix the amounts |
