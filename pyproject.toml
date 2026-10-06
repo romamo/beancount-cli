@@ -15,7 +15,7 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "beanprice2>=2.1.2",
     "pydantic-settings==2.14.1",
-    "treaty>=1.0.0rc30,<1.1",
+    "treaty>=1.0.0rc35,<1.1",
 ]
 keywords = ["beancount", "cli", "accounting", "automation", "agent"]
 classifiers = [

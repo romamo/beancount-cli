@@ -124,7 +124,7 @@ requires-dist = [
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pydantic-settings", specifier = "==2.14.1" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
-    { name = "treaty", specifier = ">=1.0.0rc30,<1.1" },
+    { name = "treaty", specifier = ">=1.0.0rc35,<1.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -778,11 +778,11 @@ wheels = [
 
 [[package]]
 name = "treaty"
-version = "1.0.0rc30"
+version = "1.0.0rc35"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7f/6f/a738f1e0b027ae9da64e1b2b1cb7ff888cdeaa3e673789a475405feb3f9d/treaty-1.0.0rc30.tar.gz", hash = "sha256:5480194304a32e97c42d8eb6d3474226ac69704d653910811e1023e53a5036ea", size = 564137, upload-time = "2026-10-03T15:46:48.718Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/57/e56aa2258b0801cd9e9400c54d7c8a7579003a702ea929edec3f59efa31e/treaty-1.0.0rc35.tar.gz", hash = "sha256:90b0ff52b1fa98d27bf39bfdd60e8d8d434529a0fa8cce322348655f022d9396", size = 606335, upload-time = "2026-10-06T10:09:58.981Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/93/9ccc8eebb65ca6208b4f0399ee59bdd88782097698a8fcfc2e5f7a695fe6/treaty-1.0.0rc30-py3-none-any.whl", hash = "sha256:2f47f486dfac347c0db032c1123adc81f7463949324834aa444e9603d55afb47", size = 562435, upload-time = "2026-10-03T15:46:47.146Z" },
+    { url = "https://files.pythonhosted.org/packages/77/49/560fc8b1248f976e013e4a46b7a0fb2233fca94561e050f737e62a4ce5e6/treaty-1.0.0rc35-py3-none-any.whl", hash = "sha256:fad680b9f7b2305e5065faa239da6431fb429780e30d7fc997387e59fb78254c", size = 602501, upload-time = "2026-10-06T10:09:57.508Z" },
 ]
 
 [[package]]
