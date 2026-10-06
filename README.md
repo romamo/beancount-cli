@@ -270,6 +270,8 @@ If `new_transaction_file` points to a **directory**, `bean` will create a new fi
 2023-01-01 custom "ledger" "new_transaction_file" "inbox/"
 ```
 
+`transaction add --target FILE` appends to `FILE` even when `new_transaction_file` is set. The pattern is still checked first, so a malformed one exits `80` with `--target` too.
+
 ### Tab Completion
 
 `bean completion` writes the completion script for your shell:
