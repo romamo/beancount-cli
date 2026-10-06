@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tree` returns the included files as a flat, depth-first list (`path`, `parent`, `depth`) instead of nested objects.
 - `price fetch` returns the same shape on every path (`effect`, `file`, `written`, `redundant`, `jobs`, `prices`, `no_data`, `errors`), its messages are envelope warnings (`PRICES_NO_DATA`, `PRICES_REDUNDANT`, `PRICE_META_MISSING`), and a source error exits `3` with the fetched prices in `data`. Its output is marked as external content. `--format plain` prints only the price directives, so it can be appended to a price file; its status lines go to stderr under `--verbose` (#17).
 - `commodity import` reads `--input-file` or stdin through treaty, and `commodity export` is a mutating command with `--dry-run` that reports `created`, `updated`, or `noop`.
+- `commodity import` without `--dry-run` on a ledger with no `custom "ledger" "commodities_file"` writes nothing and reports `noop` with the directives in `entry` (was `would_create`, or `would_update` when it would overwrite) (#24)
 - `format` reads `bean-format`'s output directly instead of through a temporary file; its unused `--recursive` flag is gone.
 - Shell completion comes from `bean completion bash|zsh` instead of argcomplete.
 - `BEAN_FILE` is read before `BEANCOUNT_FILE`, which keeps working.
