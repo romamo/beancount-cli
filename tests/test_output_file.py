@@ -58,3 +58,27 @@ def test_export_output_file_in_existing_directory_is_written(ledger: Path, tmp_p
     assert code == 0, err
     assert envelope["data"]["effect"] == "created"
     assert "commodity USD" in output.read_text()
+
+
+@pytest.mark.parametrize("command", sorted(STDIN))
+def test_output_file_naming_a_directory_is_an_argument_error(
+    command: str, ledger: Path, tmp_path: Path
+):
+    directory = tmp_path / "adir"
+    directory.mkdir()
+    before = ledger.read_bytes()
+    code, out, err = run(
+        "commodity",
+        command,
+        "--file",
+        str(ledger),
+        "--output-file",
+        str(directory),
+        stdin=STDIN[command],
+    )
+    envelope = json.loads(out)
+    assert code == 2, err
+    assert envelope["error"]["code"] == "ARG_ERROR"
+    assert "--output-file names a directory" in out
+    assert ledger.read_bytes() == before
+    assert list(directory.iterdir()) == []

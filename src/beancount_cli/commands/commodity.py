@@ -9,7 +9,15 @@ from beancount.parser import parser as bp_parser
 from beancount.parser import printer
 from treaty import Arg, Ctx, Exit, Flag, Format, Out, already_exists
 
-from beancount_cli.app import LedgerArgs, app, ledger_path, render_rows, target_path, text
+from beancount_cli.app import (
+    LedgerArgs,
+    app,
+    ledger_path,
+    refuse_directory_target,
+    render_rows,
+    target_path,
+    text,
+)
 from beancount_cli.models import (
     CommodityImportResult,
     CommodityModel,
@@ -75,6 +83,11 @@ class ExportArgs(ListArgs):
     )
     dry_run: bool = Flag(default=False, description="Report what would be written, write nothing")
 
+    def __post_init__(self) -> None:
+        refuse_directory_target(
+            self.output_file, flag="--output-file", example="DIR/commodities.beancount"
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Exported:
@@ -134,6 +147,11 @@ class ImportArgs(LedgerArgs):
     )
     overwrite: bool = Flag(default=False, description="Replace commodities that already exist")
     dry_run: bool = Flag(default=False, description="Report what would change, write nothing")
+
+    def __post_init__(self) -> None:
+        refuse_directory_target(
+            self.output_file, flag="--output-file", example="DIR/commodities.beancount"
+        )
 
 
 @dataclass(frozen=True, slots=True)
