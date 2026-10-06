@@ -63,7 +63,7 @@ Branch on the exit code or `error.code`, not on message text. Every command list
 | `5` | `NOT_FOUND` | Ledger file, account, or `commodities_file` does not exist | Fix the path or create the account |
 | `6` | `ALREADY_EXISTS` | `account create` or `commodity create` for one that exists | Nothing to do; it exists |
 | `80` | `LEDGER_INVALID` | `check` found ledger errors; `error.context.errors` lists them | Fix the ledger |
-| `81` | `TRANSACTION_INVALID` | `transaction add` names an account that is not open, or an undeclared currency | Open the account or declare the commodity |
+| `81` | `TRANSACTION_INVALID` | `transaction add` names an account that is not open or an undeclared currency, or its postings do not balance | Open the account, declare the commodity, or fix the amounts |
 | `82` | `QUERY_INVALID` | `transaction list --where` with BQL that fails | Fix the query |
 | `83` | `CURRENCY_REQUIRED` | `report audit` without `--currency` on a ledger with no operating currency | Pass `--currency` |
 | `84` | `DIRECTIVES_INVALID` | `commodity import` input is not valid beancount | Fix the input |

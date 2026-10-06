@@ -54,7 +54,7 @@ app.exit_code(
 app.exit_code(
     "TRANSACTION_INVALID",
     81,
-    description="The transaction names an account that is not open, or an undeclared currency",
+    description="The transaction names an account that is not open or an undeclared currency, or its postings do not balance",
     retryable=False,
     side_effects="none",
 )
