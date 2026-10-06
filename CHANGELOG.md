@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-06
 
 ### Changed
 - **Built on treaty instead of agentyper** (treaty 1.0.0rc35 or newer). Every command now answers with treaty's envelope (`ok`, `data`, `error`, `warnings`, `meta`), and `bean manifest` describes every command, flag, output schema, and exit code. `exec`, `--schema`, `--fields`, `--dry-run`, and `--idempotency-key` come from treaty.
