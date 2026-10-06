@@ -163,9 +163,12 @@ def tx_add(args: AddArgs, ctx: Ctx) -> TransactionWritten:
     )
     service = TransactionService(ledger_path(args.file, ctx))
     try:
-        entry = service.render_transaction(model, draft=args.draft)
+        rendered = service.render_transaction(model, draft=args.draft)
     except ValueError as e:
         raise Exit.TRANSACTION_INVALID(str(e)) from e
+    for problem in rendered.problems:
+        ctx.warn("TRANSACTION_DRAFT_INVALID", problem)
+    entry = rendered.entry
 
     fields = model.model_dump()
     target = target_path(args.target)

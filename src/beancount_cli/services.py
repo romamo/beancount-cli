@@ -1,5 +1,6 @@
 import re
 import sys
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -178,6 +179,14 @@ class ValidationService:
         return errors
 
 
+@dataclass(frozen=True, slots=True)
+class RenderedTransaction:
+    """A transaction's beancount text, and the validation problems of a draft."""
+
+    entry: str
+    problems: tuple[str, ...]
+
+
 class TransactionService:
     def __init__(self, ledger_file: Path):
         self.ledger_file = ledger_file
@@ -248,25 +257,27 @@ class TransactionService:
 
         return [from_core_transaction(tx) for tx in filtered_txs]
 
-    def render_transaction(self, tx: TransactionModel, draft: bool = False) -> str:
+    def render_transaction(self, tx: TransactionModel, draft: bool = False) -> RenderedTransaction:
         """
         Validate a transaction and return its beancount text without writing it.
+
+        A transaction that fails validation raises ``ValueError``; a draft is rendered
+        anyway, with each problem in ``problems``.
         """
         if draft:
             tx.flag = "!"
         else:
             tx.flag = "*"
 
-        # Validate
-        errors = self.validator.validate_transaction(tx)
-        if errors:
-            error_msg = "Transaction failed validation:\n" + "\n".join(f"- {e}" for e in errors)
-            if not draft:
-                raise ValueError(error_msg)
-            else:
-                print(f"Warning: {error_msg}", file=sys.stderr)
+        problems = self.validator.validate_transaction(tx)
+        if problems and not draft:
+            raise ValueError(
+                "Transaction failed validation:\n" + "\n".join(f"- {e}" for e in problems)
+            )
 
-        return printer.format_entry(to_core_transaction(tx))
+        return RenderedTransaction(
+            entry=printer.format_entry(to_core_transaction(tx)), problems=tuple(problems)
+        )
 
     def add_transaction(
         self,
@@ -277,7 +288,8 @@ class TransactionService:
         """
         Add a transaction to the ledger and return the file it was written to.
         """
-        return self.write_transaction(tx, self.render_transaction(tx, draft=draft), target_file)
+        rendered = self.render_transaction(tx, draft=draft)
+        return self.write_transaction(tx, rendered.entry, target_file)
 
     def write_transaction(
         self, tx: TransactionModel, entry_str: str, target_file: Path | None = None
