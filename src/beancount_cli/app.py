@@ -46,7 +46,8 @@ app.scalar(RegexPattern, parse=lambda value: RegexPattern(validate_regex(value))
 app.exit_code(
     "LEDGER_INVALID",
     80,
-    description="The ledger has errors; error.context.errors lists each with its location",
+    description="The ledger has errors (error.context.errors lists them) or a malformed option"
+    " (error.context.option names it)",
     retryable=False,
     side_effects="none",
     suggestion="fix the listed directives and run bean check again",
