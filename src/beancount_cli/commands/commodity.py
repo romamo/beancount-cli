@@ -9,7 +9,15 @@ from beancount.parser import parser as bp_parser
 from beancount.parser import printer
 from treaty import Arg, Ctx, Exit, Flag, Format, Out, already_exists
 
-from beancount_cli.app import LedgerArgs, app, ledger_path, render_rows, text
+from beancount_cli.app import (
+    LedgerArgs,
+    app,
+    ledger_path,
+    refuse_directory_target,
+    render_rows,
+    target_path,
+    text,
+)
 from beancount_cli.models import (
     CommodityImportResult,
     CommodityModel,
@@ -75,6 +83,11 @@ class ExportArgs(ListArgs):
     )
     dry_run: bool = Flag(default=False, description="Report what would be written, write nothing")
 
+    def __post_init__(self) -> None:
+        refuse_directory_target(
+            self.output_file, flag="--output-file", example="DIR/commodities.beancount"
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Exported:
@@ -100,11 +113,12 @@ def render_export(data: Mapping[str, Any]) -> str:
     renderers={Format.PLAIN: render_export},
 )
 def commodity_export(args: ExportArgs, ctx: Ctx) -> Exported:
+    output_file = target_path(args.output_file, flag="--output-file")
     service = CommodityService(ledger_path(args.file, ctx))
     commodities = service.list_commodities(asset_class=args.asset_class)
     content = "\n".join(service._format_commodity_block(c) for c in commodities)
 
-    dest = args.output_file or service.ledger_service.get_commodities_file()
+    dest = output_file or service.ledger_service.get_commodities_file()
     if dest is None:
         return Exported(effect="noop", file=None, count=len(commodities), entry=content)
     if dest.exists() and dest.read_text() == content:
@@ -133,6 +147,11 @@ class ImportArgs(LedgerArgs):
     )
     overwrite: bool = Flag(default=False, description="Replace commodities that already exist")
     dry_run: bool = Flag(default=False, description="Report what would change, write nothing")
+
+    def __post_init__(self) -> None:
+        refuse_directory_target(
+            self.output_file, flag="--output-file", example="DIR/commodities.beancount"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +185,7 @@ def render_import(data: Mapping[str, Any]) -> str:
     renderers={Format.PLAIN: render_import},
 )
 def commodity_import(args: ImportArgs, ctx: Ctx) -> Imported:
+    output_file = target_path(args.output_file, flag="--output-file")
     entries, errors, _ = bp_parser.parse_string(ctx.stdin_text or "")
     if errors:
         raise Exit.DIRECTIVES_INVALID(
@@ -182,7 +202,7 @@ def commodity_import(args: ImportArgs, ctx: Ctx) -> Imported:
         return Imported(effect="noop", file=None, entry="")
 
     service = CommodityService(ledger_path(args.file, ctx))
-    dest = args.output_file or service.ledger_service.get_commodities_file()
+    dest = output_file or service.ledger_service.get_commodities_file()
     if dest is not None and not dest.exists():
         raise Exit.NOT_FOUND(f"commodities_file not found: {dest}", context={"file": str(dest)})
 

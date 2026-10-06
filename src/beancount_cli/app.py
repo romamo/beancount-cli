@@ -122,28 +122,30 @@ def ledger_path(file: Path | None, ctx: Ctx) -> Path:
     return path
 
 
-def refuse_directory_target(target: Path | None) -> None:
-    """Refuse a ``--target`` that names a directory, at parse time (exit 2): an args
-    ``__post_init__`` calls it, so nothing has run yet."""
+def refuse_directory_target(
+    target: Path | None, *, flag: str = "--target", example: str = "DIR/transactions.beancount"
+) -> None:
+    """Refuse a write flag (``--target``, ``--output-file``) that names a directory, at
+    parse time (exit 2): an args ``__post_init__`` calls it, so nothing has run yet."""
     if target is not None and target.is_dir():
         raise ParseError(
-            f"--target names a directory, not a file: {target}",
-            context={"field": "target", "file": str(target)},
-            suggestion="pass a file path, e.g. --target DIR/transactions.beancount",
+            f"{flag} names a directory, not a file: {target}",
+            context={"field": flag.removeprefix("--").replace("-", "_"), "file": str(target)},
+            suggestion=f"pass a file path, e.g. {flag} {example}",
         )
 
 
-def target_path(target: Path | None) -> Path | None:
-    """Check a ``--target`` file's directory exists before anything is written; it is
-    never created."""
+def target_path(target: Path | None, *, flag: str = "--target") -> Path | None:
+    """Check the directory of the file a write flag (``--target``, ``--output-file``)
+    names exists before anything is written; it is never created."""
     if target is None:
         return None
     directory = target.parent
     if not directory.is_dir():
         raise Exit.NOT_FOUND(
-            f"Directory of --target not found: {directory}",
+            f"Directory of {flag} not found: {directory}",
             context={"file": str(directory)},
-            suggestion=f"create {directory} first, or pass a --target in an existing directory",
+            suggestion=f"create {directory} first, or pass a {flag} in an existing directory",
         )
     return target
 
