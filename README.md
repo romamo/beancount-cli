@@ -56,7 +56,7 @@ bean transaction list --format tsv
 bean transaction list --fields date,payee,narration
 ```
 
-Flags go after the command: `bean account list --format json`, not `bean --format json account list`.
+A command's own flags go after the command: `bean account list --file main.beancount`, not `bean --file main.beancount account list`. Global flags such as `--format` and `--fields` go before or after it; `--help` lists both kinds.
 
 List commands (`transaction list`, `account list`, `commodity list`, `price check`) return 20 items at a time. `--limit 0` returns all of them, and `--cursor` with `meta.pagination.next_cursor` the next page.
 
