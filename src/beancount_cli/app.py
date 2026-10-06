@@ -133,17 +133,17 @@ def refuse_directory_target(target: Path | None) -> None:
         )
 
 
-def target_path(target: Path | None) -> Path | None:
-    """Check a ``--target`` file's directory exists before anything is written; it is
-    never created."""
+def target_path(target: Path | None, *, flag: str = "--target") -> Path | None:
+    """Check the directory of the file a write flag (``--target``, ``--output-file``)
+    names exists before anything is written; it is never created."""
     if target is None:
         return None
     directory = target.parent
     if not directory.is_dir():
         raise Exit.NOT_FOUND(
-            f"Directory of --target not found: {directory}",
+            f"Directory of {flag} not found: {directory}",
             context={"file": str(directory)},
-            suggestion=f"create {directory} first, or pass a --target in an existing directory",
+            suggestion=f"create {directory} first, or pass a {flag} in an existing directory",
         )
     return target
 
