@@ -1,10 +1,12 @@
 """Regression tests for #16: `transaction add` must refuse postings that don't balance."""
 
+import json
 import textwrap
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from cli_helpers import call, run
 
 from beancount_cli.models import AmountModel, CostModel, PostingModel, TransactionModel
 from beancount_cli.services import LedgerService, TransactionService, ValidationService
@@ -148,5 +150,95 @@ def test_draft_keeps_warn_only_behaviour(ledger_file, capsys):
         postings=[_posting("Expenses:Food", "12.50", "USD")],
     )
     TransactionService(ledger_file).add_transaction(tx, draft=True)
-    assert "Transaction does not balance: (12.50 USD)" in capsys.readouterr().err
+    assert capsys.readouterr().err == ""
+    assert '2024-03-01 ! "Draft"' in ledger_file.read_text()
+
+
+def test_render_draft_returns_its_problems(ledger_file):
+    tx = TransactionModel(
+        date="2024-03-01",
+        narration="Draft",
+        postings=[_posting("Expenses:Food", "12.50", "USD")],
+    )
+    rendered = TransactionService(ledger_file).render_transaction(tx, draft=True)
+    assert rendered.problems == ("Transaction does not balance: (12.50 USD)",)
+    assert '2024-03-01 ! "Draft"' in rendered.entry
+
+
+# #22: a draft's validation problems are envelope warnings, not ad hoc stderr lines
+
+
+def _add_draft(ledger_file: Path, *postings: dict[str, object]):
+    return call(
+        "transaction.add",
+        file=str(ledger_file),
+        date="2024-03-01",
+        narration="Draft",
+        postings=list(postings),
+        draft=True,
+    )
+
+
+def _leg(account: str, number: str) -> dict[str, object]:
+    return {"account": account, "units": {"number": number, "currency": "USD"}}
+
+
+def test_unbalanced_draft_warns_in_the_envelope(ledger_file):
+    env = _add_draft(ledger_file, _leg("Assets:Cash", "-1"), _leg("Expenses:Food", "2"))
+    assert env.exit_code == 0, env.error
+    assert env.data["effect"] == "created"
+    assert [(w.code, w.message) for w in env.warnings] == [
+        ("TRANSACTION_DRAFT_INVALID", "Transaction does not balance: (1 USD)")
+    ]
+    assert '2024-03-01 ! "Draft"' in ledger_file.read_text()
+
+
+def test_draft_with_two_problems_warns_twice(ledger_file):
+    env = _add_draft(ledger_file, _leg("Assets:Missing", "-1"), _leg("Expenses:Food", "2"))
+    assert env.exit_code == 0, env.error
+    assert [(w.code, w.message) for w in env.warnings] == [
+        (
+            "TRANSACTION_DRAFT_INVALID",
+            "Account 'Assets:Missing' does not exist (no Open directive).",
+        ),
+        ("TRANSACTION_DRAFT_INVALID", "Transaction does not balance: (1 USD)"),
+    ]
+
+
+def test_valid_draft_has_no_warnings(ledger_file):
+    env = _add_draft(ledger_file, _leg("Assets:Cash", "-1"), _leg("Expenses:Food", "1"))
+    assert env.exit_code == 0, env.error
+    assert env.warnings == ()
+
+
+def test_unbalanced_draft_warns_off_a_terminal_without_ad_hoc_lines(ledger_file):
+    code, out, err = run(
+        "transaction", "add", "-f", str(ledger_file), "--date", "2024-03-01",
+        "--narration", "Draft", "--draft",
+        "--postings", json.dumps(_leg("Assets:Cash", "-1")),
+        "--postings", json.dumps(_leg("Expenses:Food", "2")),
+    )  # fmt: skip
+    assert code == 0, err
+    assert "Transaction failed validation" not in err
+    warnings = json.loads(out)["warnings"]
+    assert [(w["code"], w["message"]) for w in warnings] == [
+        ("TRANSACTION_DRAFT_INVALID", "Transaction does not balance: (1 USD)")
+    ]
+
+
+def test_exec_draft_line_warns(ledger_file):
+    line = {
+        "_cmd": "transaction.add",
+        "file": str(ledger_file),
+        "date": "2024-03-01",
+        "narration": "Draft",
+        "draft": True,
+        "postings": [_leg("Assets:Cash", "-1"), _leg("Expenses:Food", "2")],
+    }
+    code, out, err = run("exec", stdin=json.dumps(line) + "\n")
+    assert code == 0, err
+    (result,) = [json.loads(r) for r in out.splitlines()]
+    assert [(w["code"], w["message"]) for w in result["warnings"]] == [
+        ("TRANSACTION_DRAFT_INVALID", "Transaction does not balance: (1 USD)")
+    ]
     assert '2024-03-01 ! "Draft"' in ledger_file.read_text()
