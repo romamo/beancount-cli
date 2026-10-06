@@ -21,9 +21,11 @@ If you are an AI agent analyzing, refactoring, or editing the Beancount CLI Pyth
     - **Primitive-to-VO Coercion**: Models and Interfaces should accept primitives in type hints (`VO | str`) for better developer experience but normalize internally.
     - **Mypy Compatibility**: Use `TYPE_CHECKING` unions. To avoid "hiding" the base entity, prefer the **Namespace Pattern** (`VO.Input`) over generic names like `VOInput`.
 
-### 4. Global Formatting Standard
-- Ensure all new list or querying features support the `--format` engine (`table` | `json` | `csv`).
-- Always pass structural data to `render_output()` from `beancount_cli.formatting`. Never print raw `rich`-style tables locally inside command functions to guarantee programmatic composability.
+### 4. Commands and Output
+- The CLI is built on [treaty](https://github.com/romamo/treaty). Commands register on `app` from `beancount_cli.app`, take a frozen args dataclass extending `LedgerArgs`, and declare `danger_level`, `exit_codes`, and `examples`.
+- Handlers return data (a dataclass or a pydantic model) and never print. treaty writes the JSON envelope; a `renderers={Format.PLAIN: ...}` function turns `data` into the text people see, using `render_rows()` or `formatting.Table`.
+- Mutating commands return an `effect` (`created`, `updated`, `noop`, or `would_*` under `--dry-run`). Failures raise `Exit.<CODE>(...)` with a code listed in the command's `exit_codes`; app codes are declared in `app.py`.
+- Run `uv run treaty audit beancount_cli.cli:app` after changing a command.
 
 ### 5. Testing & Quality
 Always ensure changes are covered by running the complete quality suite before finalizing your step. There are no exceptions to failing checks:

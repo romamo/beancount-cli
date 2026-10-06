@@ -30,6 +30,21 @@ def validate_currency_code(v: Any) -> str:
     return v
 
 
+def validate_regex(v: Any) -> str:
+    """Validation logic for RegexPattern."""
+    if not isinstance(v, str):
+        raise TypeError("string required")
+    try:
+        re.compile(v)
+    except re.error as e:
+        raise ValueError(f"Invalid regular expression '{v}': {e}") from e
+    return v
+
+
+class RegexPattern(str):
+    """Value Object for a regular expression filter."""
+
+
 class AccountName(str):
     """Value Object for Beancount Account Names."""
 
@@ -93,7 +108,7 @@ class TransactionModel(BaseModel):
     narration: str
     tags: set[str] = Field(default_factory=set)
     links: set[str] = Field(default_factory=set)
-    postings: list[PostingModel]
+    postings: list[PostingModel] = Field(json_schema_extra={"x-ordered": True})
     meta: dict[str, Any] = Field(default_factory=dict)
 
 

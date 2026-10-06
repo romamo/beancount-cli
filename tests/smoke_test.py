@@ -5,73 +5,46 @@ import tempfile
 from pathlib import Path
 
 
-def test_smoke():
-    """
-    Basic smoke test to ensure the CLI is functional and can be imported.
-    """
-    print("Running smoke test...")
-
-    # 1. Check help command
+def bean(*args: str) -> subprocess.CompletedProcess:
     # Using sys.executable -m to ensure we test the current environment
-    result = subprocess.run(
-        [sys.executable, "-m", "beancount_cli.cli", "--help"],
+    return subprocess.run(
+        [sys.executable, "-m", "beancount_cli.cli", *args],
         capture_output=True,
         text=True,
         check=False,
     )
-    assert result.returncode == 0
-    assert "Beancount CLI tool" in result.stdout + result.stderr
 
-    # 2. Check version command
-    result = subprocess.run(
-        [sys.executable, "-m", "beancount_cli.cli", "--version"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0
-    assert result.stdout.startswith("bean ")
 
-    # 3. Check transaction schema command
-    result = subprocess.run(
-        [sys.executable, "-m", "beancount_cli.cli", "transaction", "add", "--schema"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def test_smoke():
+    """The CLI imports, describes itself, and checks a ledger."""
+    result = bean("--help")
+    assert result.returncode == 0
+    assert "Beancount CLI tool" in result.stderr
+
+    result = bean("--version")
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["data"]["name"] == "bean"
+
+    result = bean("transaction", "add", "--schema")
     assert result.returncode == 0
     assert "properties" in result.stdout
 
-    # 4. Check with a minimal ledger file
+    result = bean("manifest")
+    assert result.returncode == 0
+    assert "transaction.add" in json.loads(result.stdout)["data"]["commands"]
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".beancount", delete=False) as f:
         f.write("2023-01-01 open Assets:Cash USD\n")
         temp_path = Path(f.name)
 
     try:
-        result = subprocess.run(
-            [sys.executable, "-m", "beancount_cli.cli", "check", str(temp_path)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        result = bean("check", str(temp_path))
         assert result.returncode == 0
         assert json.loads(result.stdout)["data"]["valid"] is True
     finally:
-        if temp_path.exists():
-            temp_path.unlink()
-
-    print("Smoke test passed.")
+        temp_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
-    try:
-        test_smoke()
-    except AssertionError as e:
-        print(f"Smoke test failed: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        import traceback
-
-        traceback.print_exc()
-        sys.exit(1)
+    test_smoke()
+    print("Smoke test passed.")

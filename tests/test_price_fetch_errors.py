@@ -12,9 +12,10 @@ import sys
 import textwrap
 from pathlib import Path
 
-import agentyper
 import fake_price_source
 import pytest
+from beancount.core import data
+from beancount.parser import parser
 from beanprice import price as bp_price
 
 from beancount_cli.commands.price import _fetch_price_job
@@ -42,9 +43,11 @@ LEDGER = """
 """
 
 
-def _run_fetch(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
+def _run_fetch(
+    tmp_path: Path, *args: str, ledger_text: str = LEDGER
+) -> subprocess.CompletedProcess:
     ledger = tmp_path / "main.beancount"
-    ledger.write_text(textwrap.dedent(LEDGER))
+    ledger.write_text(textwrap.dedent(ledger_text))
     env = {
         **os.environ,
         "PYTHONPATH": os.pathsep.join([str(TESTS_DIR), os.environ.get("PYTHONPATH", "")]),
@@ -63,21 +66,23 @@ def _run_fetch(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
 def test_source_error_does_not_abort_other_jobs(tmp_path):
     result = _run_fetch(tmp_path)
 
-    assert result.returncode == agentyper.ExitCode.PARTIAL_FAILURE, result.stderr
-    data = json.loads(result.stdout)["data"]
+    assert result.returncode == 3, result.stderr
+    envelope = json.loads(result.stdout)
+    assert envelope["error"]["code"] == "PARTIAL_FAILURE"
+    assert envelope["error"]["message"].startswith("Skipped 1 jobs with source errors: FAIL")
+    assert "connection reset by peer" in envelope["error"]["message"]
+    data = envelope["data"]
     assert [p["currency"] for p in data["prices"]] == ["GOOD"]
-    assert [e["job"] for e in data["errors"]] == ["FAIL on latest"]
+    assert data["errors"] == [{"job": "FAIL on latest", "error": "connection reset by peer"}]
     assert data["no_data"] == ["NONE on latest"]
-    assert "Error fetching prices" not in result.stderr
-    assert "Skipped 1 jobs with source errors: FAIL" in result.stderr
-    assert "connection reset by peer" in result.stderr
-    assert "Skipped 1 jobs with no data from source: NONE" in result.stderr
+    assert "PRICES_NO_DATA" in [w["code"] for w in envelope["warnings"]]
 
 
 def test_update_writes_prices_despite_source_error(tmp_path):
     result = _run_fetch(tmp_path, "--update")
 
-    assert result.returncode == agentyper.ExitCode.PARTIAL_FAILURE, result.stderr
+    assert result.returncode == 3, result.stderr
+    assert json.loads(result.stdout)["data"]["effect"] == "created"
     ledger_text = (tmp_path / "main.beancount").read_text()
     assert "price GOOD" in ledger_text
     assert "price FAIL" not in ledger_text
@@ -96,3 +101,47 @@ def test_fetch_price_job_records_transport_error():
 def test_fetch_price_job_propagates_unexpected_errors():
     with pytest.raises(RuntimeError, match="source bug"):
         _fetch_price_job(_job("BUG"))
+
+
+GOOD_ONLY = """
+    option "operating_currency" "USD"
+
+    2026-01-01 commodity GOOD
+      price: "USD:fake_price_source/OK"
+
+    2026-01-01 open Assets:Broker
+    2026-01-01 open Equity:Opening
+
+    2026-01-02 * "Buy"
+      Assets:Broker   1 GOOD {1 USD}
+      Equity:Opening -1 USD
+"""
+
+
+def _assert_only_directives(stdout: str) -> None:
+    entries, errors, _ = parser.parse_string(stdout)
+    assert errors == []
+    assert all(isinstance(e, data.Price) for e in entries)
+
+
+@pytest.mark.parametrize("update", [False, True])
+def test_plain_output_is_appendable_beancount(tmp_path, update):
+    """#17: plain stdout holds only price directives; status lines go to stderr"""
+    flags = ("--update",) if update else ()
+    result = _run_fetch(tmp_path, "--format", "plain", "--verbose", *flags, ledger_text=GOOD_ONLY)
+
+    assert result.returncode == 0, result.stderr
+    _assert_only_directives(result.stdout)
+    assert "price GOOD" in result.stdout
+    if update:
+        assert "Appended 1 new prices" in result.stderr
+
+
+def test_plain_output_is_empty_when_nothing_is_new(tmp_path):
+    ledger_text = GOOD_ONLY + "\n    2020-01-01 open Assets:Unused\n"
+    ledger_text = ledger_text.replace('price: "USD:fake_price_source/OK"', "")
+    result = _run_fetch(tmp_path, "--format", "plain", "--verbose", ledger_text=ledger_text)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+    assert "No new prices found." in result.stderr

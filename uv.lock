@@ -7,19 +7,6 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "agentyper"
-version = "0.1.22"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydantic" },
-    { name = "rich" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a7/37/b9b52c61d2e6f3cc8e63cd509d66c314f6a0d2543123379e90d5d692a4a6/agentyper-0.1.22.tar.gz", hash = "sha256:9df7a9513afa397db6d221c02174b6eea0584b0a6dc022d1cf8ffdcb1def8bb6", size = 54199, upload-time = "2026-09-29T19:00:27.521Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/17/822f1af60703f4ee4a6add2611c91838c4bcad105626ae8fe3c3907960e8/agentyper-0.1.22-py3-none-any.whl", hash = "sha256:0177816df3cca07ccfb5f62a6a713fa9b9d3b8bb6d147ac7c79ec2df9f4a22f6", size = 47492, upload-time = "2026-09-29T19:00:26.475Z" },
-]
-
-[[package]]
 name = "annotated-types"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -111,13 +98,13 @@ name = "beancount-cli"
 version = "0.5.0"
 source = { editable = "." }
 dependencies = [
-    { name = "agentyper" },
     { name = "beancount" },
     { name = "beanprice2" },
     { name = "beanquery" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dateutil" },
+    { name = "treaty" },
 ]
 
 [package.dev-dependencies]
@@ -131,13 +118,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentyper", specifier = ">=0.1.22" },
     { name = "beancount", specifier = "==3.2.3" },
     { name = "beanprice2", specifier = ">=2.1.2" },
     { name = "beanquery", specifier = ">=0.1.0" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pydantic-settings", specifier = "==2.14.1" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
+    { name = "treaty", specifier = ">=1.0.0rc30,<1.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -787,6 +774,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d3/81/9ab714191017d23a0e73921e7d869890e5bf6a5eca89dee57d2b76c6c536/tatsu_lts-5.16.0.tar.gz", hash = "sha256:40ad376b4ed4e139a8d00d00bd6659d44c3b7546933fb3314132f776bfa1f44f", size = 226534, upload-time = "2026-01-14T00:00:57.794Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/84/d3/c4c50188b3a75530eab685899c2efae85a1892be50335f4700963d8a1e14/tatsu_lts-5.16.0-py3-none-any.whl", hash = "sha256:43b21f741a8d1b03148e84294aa6867ab0607f9c3325d93df8b0cf3ad8ece74b", size = 82963, upload-time = "2026-01-14T00:00:56.406Z" },
+]
+
+[[package]]
+name = "treaty"
+version = "1.0.0rc30"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/6f/a738f1e0b027ae9da64e1b2b1cb7ff888cdeaa3e673789a475405feb3f9d/treaty-1.0.0rc30.tar.gz", hash = "sha256:5480194304a32e97c42d8eb6d3474226ac69704d653910811e1023e53a5036ea", size = 564137, upload-time = "2026-10-03T15:46:48.718Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/93/9ccc8eebb65ca6208b4f0399ee59bdd88782097698a8fcfc2e5f7a695fe6/treaty-1.0.0rc30-py3-none-any.whl", hash = "sha256:2f47f486dfac347c0db032c1123adc81f7463949324834aa444e9603d55afb47", size = 562435, upload-time = "2026-10-03T15:46:47.146Z" },
 ]
 
 [[package]]

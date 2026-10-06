@@ -15,7 +15,7 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "beanprice2>=2.1.2",
     "pydantic-settings==2.14.1",
-    "agentyper>=0.1.22",
+    "treaty>=1.0.0rc30,<1.1",
 ]
 keywords = ["beancount", "cli", "accounting", "automation", "agent"]
 classifiers = [
@@ -79,11 +79,15 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["agentyper.Argument", "agentyper.Option", "typer.Argument", "typer.Option"]
+extend-immutable-calls = ["treaty.Arg", "treaty.Flag", "treaty.Out"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
 
+
+[[tool.mypy.overrides]]
+module = ["beanprice.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
