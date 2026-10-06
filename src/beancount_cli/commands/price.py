@@ -172,8 +172,9 @@ class PriceFetch:
 
 def render_fetch(data: Mapping[str, Any]) -> str:
     if data.get("effect") == "would_create":
+        # Beancount comments, so the dry-run output is still a valid price file
         jobs = data.get("jobs", [])
-        return f"Dry run: {len(jobs)} jobs generated.\n" + "".join(f"  {j}\n" for j in jobs)
+        return f"; Dry run: {len(jobs)} jobs generated.\n" + "".join(f";   {j}\n" for j in jobs)
     # Only directives, so the output can be appended to a price file; status goes to stderr
     return "".join(
         f"{p['date']} price {p['currency']} {p['number']} {p['quote']}\n"
