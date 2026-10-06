@@ -12,7 +12,7 @@ If you are executing shell commands to help a human analyze or modify their `mai
 
 ### Core Configuration & Bootstrapping
 - **Ledger Path**: The CLI requires a target `.beancount` file. Pass it with `--file /path/to/main.beancount` (or `-f`), or set `BEANCOUNT_FILE` (`BEAN_FILE` also works and wins when both are set). Without either, `./main.beancount` is used.
-- **Flag Order**: Flags go after the command path: `uv run bean account list --format json`. A flag before the command exits `2` with a suggestion showing the right order.
+- **Flag Order**: A command's own flags (under `Flags` in its `--help`, such as `--file`/`-f`, `--limit`, `--dry-run`) go after the command path: `uv run bean account list --file main.beancount`. One before the command exits `2` with a suggestion showing the right order. Global flags (under `Global flags`, such as `--format`, `--fields`, `--schema`, `--max-output`, `--help`/`-h`) go before or after it.
 - **Self Discovery**: `uv run bean manifest` describes every command, flag, output schema, and exit code in one JSON document. For one command, run `uv run bean <command> --schema`, or `--help` for prose.
 
 ### Available Capabilities (High-Level)

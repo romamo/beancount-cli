@@ -48,6 +48,20 @@ def test_file_defaults_to_beancount_file_env(temp_beancount_file):
     assert [a["name"] for a in env.data] == ["Assets:Cash", "Expenses:Food", "Income:Salary"]
 
 
+def test_global_flags_go_anywhere_command_flags_after(temp_beancount_file):
+    # AGENTS.md "Flag Order": global flags before the command are accepted
+    code, out, err = run("--format", "json", "account", "list", "--file", str(temp_beancount_file))
+    assert code == 0, err
+    assert json.loads(out)["ok"] is True
+
+    # A command's own flag before the command exits 2
+    code, out, _ = run("--file", str(temp_beancount_file), "account", "list")
+    assert code == 2
+    env = json.loads(out)
+    assert env["error"]["code"] == "ARG_ERROR"
+    assert env["error"]["context"]["flag"] == "--file"
+
+
 def test_transaction_list(temp_beancount_file):
     env = call("transaction.list", file=str(temp_beancount_file))
     assert env.exit_code == 0
