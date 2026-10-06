@@ -7,7 +7,15 @@ from typing import Any, Literal
 
 from treaty import Ctx, Exit, Flag, Format
 
-from beancount_cli.app import LedgerArgs, app, ledger_path, render_rows, text
+from beancount_cli.app import (
+    LedgerArgs,
+    app,
+    ledger_path,
+    refuse_directory_target,
+    render_rows,
+    target_path,
+    text,
+)
 from beancount_cli.models import (
     AccountName,
     AmountModel,
@@ -112,6 +120,9 @@ class AddArgs(LedgerArgs):
     target: Path | None = Flag(default=None, description="Write to this file instead")
     dry_run: bool = Flag(default=False, description="Show the entry, write nothing")
 
+    def __post_init__(self) -> None:
+        refuse_directory_target(self.target)
+
 
 class TransactionWritten(TransactionModel):
     effect: Literal["created", "would_create"]
@@ -160,7 +171,8 @@ def tx_add(args: AddArgs, ctx: Ctx) -> TransactionWritten:
     entry = rendered.entry
 
     fields = model.model_dump()
+    target = target_path(args.target)
     if args.dry_run:
         return TransactionWritten(**fields, effect="would_create", file=None, entry=entry)
-    written = service.write_transaction(model, entry, target_file=args.target)
+    written = service.write_transaction(model, entry, target_file=target)
     return TransactionWritten(**fields, effect="created", file=written, entry=entry)
