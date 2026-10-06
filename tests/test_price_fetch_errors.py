@@ -14,6 +14,7 @@ from pathlib import Path
 
 import fake_price_source
 import pytest
+from beancount import loader
 from beancount.core import data
 from beancount.parser import parser
 from beanprice import price as bp_price
@@ -145,3 +146,28 @@ def test_plain_output_is_empty_when_nothing_is_new(tmp_path):
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
     assert "No new prices found." in result.stderr
+
+
+def test_plain_dry_run_is_beancount_comments(tmp_path):
+    """#23: the dry-run job list stays on stdout, but as comments that load cleanly"""
+    result = _run_fetch(
+        tmp_path, "--dry-run", "--format", "plain", "--verbose", ledger_text=GOOD_ONLY
+    )
+
+    assert result.returncode == 0, result.stderr
+    entries, errors, _ = loader.load_string(result.stdout)
+    assert errors == []
+    assert entries == []
+    assert all(line.startswith(";") for line in result.stdout.splitlines())
+    assert "; Dry run: 1 jobs generated." in result.stdout
+    assert "fake_price_source(OK)" in result.stdout
+
+
+def test_json_dry_run_lists_jobs_unprefixed(tmp_path):
+    result = _run_fetch(tmp_path, "--dry-run", "--format", "json", ledger_text=GOOD_ONLY)
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)["data"]
+    assert data["effect"] == "would_create"
+    assert len(data["jobs"]) == 1
+    assert data["jobs"][0].startswith("GOOD /USD")

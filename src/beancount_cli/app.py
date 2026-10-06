@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
-from treaty import App, Ctx, Exit, Flag, Format, table
+from treaty import App, Ctx, Exit, Flag, Format, ParseError, table
 
 from beancount_cli import __version__
 from beancount_cli.formatting import Table
@@ -119,6 +119,32 @@ def ledger_path(file: Path | None, ctx: Ctx) -> Path:
             suggestion="pass --file PATH or set BEANCOUNT_FILE",
         )
     return path
+
+
+def refuse_directory_target(target: Path | None) -> None:
+    """Refuse a ``--target`` that names a directory, at parse time (exit 2): an args
+    ``__post_init__`` calls it, so nothing has run yet."""
+    if target is not None and target.is_dir():
+        raise ParseError(
+            f"--target names a directory, not a file: {target}",
+            context={"field": "target", "file": str(target)},
+            suggestion="pass a file path, e.g. --target DIR/transactions.beancount",
+        )
+
+
+def target_path(target: Path | None) -> Path | None:
+    """Check a ``--target`` file's directory exists before anything is written; it is
+    never created."""
+    if target is None:
+        return None
+    directory = target.parent
+    if not directory.is_dir():
+        raise Exit.NOT_FOUND(
+            f"Directory of --target not found: {directory}",
+            context={"file": str(directory)},
+            suggestion=f"create {directory} first, or pass a --target in an existing directory",
+        )
+    return target
 
 
 def render_rows(

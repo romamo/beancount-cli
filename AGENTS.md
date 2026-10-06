@@ -12,7 +12,7 @@ If you are executing shell commands to help a human analyze or modify their `mai
 
 ### Core Configuration & Bootstrapping
 - **Ledger Path**: The CLI requires a target `.beancount` file. Pass it with `--file /path/to/main.beancount` (or `-f`), or set `BEANCOUNT_FILE` (`BEAN_FILE` also works and wins when both are set). Without either, `./main.beancount` is used.
-- **Flag Order**: Flags go after the command path: `uv run bean account list --format json`. A flag before the command exits `2` with a suggestion showing the right order.
+- **Flag Order**: A command's own flags (under `Flags` in its `--help`, such as `--file`/`-f`, `--limit`, `--dry-run`) go after the command path: `uv run bean account list --file main.beancount`. One before the command exits `2` with a suggestion showing the right order. Global flags (under `Global flags`, such as `--format`, `--fields`, `--schema`, `--max-output`, `--help`/`-h`) go before or after it.
 - **Self Discovery**: `uv run bean manifest` describes every command, flag, output schema, and exit code in one JSON document. For one command, run `uv run bean <command> --schema`, or `--help` for prose.
 
 ### Available Capabilities (High-Level)
@@ -52,7 +52,7 @@ If you are executing shell commands to help a human analyze or modify their `mai
 
 ### Exit Codes
 
-Branch on the exit code or `error.code`, not on message text. Every command lists the codes it can return in `bean manifest` and `--schema`.
+Branch on the exit code or `error.code`, not on message text. Every command lists the codes it can return in `bean manifest` and `--schema`, keyed by number with a name. The name matches `error.code` for every code but `6`: the manifest names it `CONFLICT`, while the envelope's `error.code` is `ALREADY_EXISTS`.
 
 | Code | `error.code` | Meaning | What to do |
 |---|---|---|---|
@@ -61,7 +61,7 @@ Branch on the exit code or `error.code`, not on message text. Every command list
 | `2` | `ARG_ERROR` | Bad or missing argument, unknown flag or command; `error.errors` lists each problem with its `field` | Fix the input and reissue |
 | `3` | `PARTIAL_FAILURE` | `price fetch` where some sources failed; the fetched prices are still written and in `data` | Retry only the jobs in `data.errors` |
 | `5` | `NOT_FOUND` | Ledger file, account, or `commodities_file` does not exist | Fix the path or create the account |
-| `6` | `ALREADY_EXISTS` | `account create` or `commodity create` for one that exists | Nothing to do; it exists |
+| `6` | `ALREADY_EXISTS` (manifest name `CONFLICT`) | `account create` or `commodity create` for one that exists; `data` names the existing account or commodity | Nothing to do; it exists |
 | `80` | `LEDGER_INVALID` | `check` found ledger errors; `error.context.errors` lists them | Fix the ledger |
 | `81` | `TRANSACTION_INVALID` | `transaction add` names an account that is not open or an undeclared currency, or its postings do not balance | Open the account, declare the commodity, or fix the amounts |
 | `82` | `QUERY_INVALID` | `transaction list --where` with BQL that fails | Fix the query |
