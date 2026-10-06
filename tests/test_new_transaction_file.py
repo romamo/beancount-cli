@@ -1,4 +1,7 @@
-"""Regression tests for #33: a malformed new_transaction_file pattern refuses with LEDGER_INVALID."""
+"""Regression tests for new_transaction_file.
+
+#33: a malformed pattern refuses with LEDGER_INVALID. #37: --target wins over a valid pattern.
+"""
 
 import json
 import textwrap
@@ -160,3 +163,113 @@ def test_placeholder_nested_in_format_spec_is_refused(tmp_path, pattern, placeho
     assert envelope["error"]["context"]["placeholder"] == placeholder
     assert err == ""
     assert _files(tmp_path) == [ledger]
+
+
+def _tx() -> TransactionModel:
+    return TransactionModel(
+        date=date(2024, 1, 15),
+        narration="Groceries",
+        postings=[
+            PostingModel(
+                account="Expenses:Food", units=AmountModel(number=Decimal(50), currency="USD")
+            ),
+            PostingModel(
+                account="Assets:Cash", units=AmountModel(number=Decimal(-50), currency="USD")
+            ),
+        ],
+    )
+
+
+@pytest.mark.parametrize("pattern", ["inbox/{year}.beancount", "inbox/{year}"])
+def test_target_wins_over_pattern(tmp_path, pattern):
+    ledger = _ledger(tmp_path, pattern)
+    before = ledger.read_text()
+    target = tmp_path / "other.beancount"
+    target.write_text("; other\n")
+
+    code, envelope, err = _add(ledger, "--target", str(target))
+
+    assert code == 0, envelope
+    assert envelope["data"]["effect"] == "created"
+    assert envelope["data"]["file"] == str(target)
+    assert target.read_text().startswith("; other\n")
+    assert "Groceries" in target.read_text()
+    assert not (tmp_path / "inbox").exists()
+    assert ledger.read_text() == before
+    assert err == ""
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_malformed_pattern_with_target_is_refused(tmp_path, dry_run):
+    ledger = _ledger(tmp_path, "inbox/{week}.beancount")
+    target = tmp_path / "other.beancount"
+    target.write_text("; other\n")
+
+    code, envelope, err = _add(ledger, "--target", str(target), *(["--dry-run"] if dry_run else []))
+
+    assert code == 80
+    assert envelope["error"]["code"] == "LEDGER_INVALID"
+    assert envelope["error"]["context"]["placeholder"] == "week"
+    assert err == ""
+    assert target.read_text() == "; other\n"
+    assert _files(tmp_path) == [ledger, target]
+
+
+def test_dry_run_with_target_and_pattern_writes_nothing(tmp_path):
+    ledger = _ledger(tmp_path, "inbox/{year}.beancount")
+    target = tmp_path / "other.beancount"
+    target.write_text("; other\n")
+
+    code, envelope, _ = _add(ledger, "--target", str(target), "--dry-run")
+
+    assert code == 0
+    assert envelope["data"]["effect"] == "would_create"
+    assert envelope["data"]["file"] is None
+    assert target.read_text() == "; other\n"
+    assert not (tmp_path / "inbox").exists()
+
+
+def test_exec_line_target_wins_over_pattern(tmp_path):
+    ledger = _ledger(tmp_path, "inbox/{year}.beancount")
+    target = tmp_path / "other.beancount"
+    target.write_text("")
+    line = {
+        "_cmd": "transaction.add",
+        "file": str(ledger),
+        "target": str(target),
+        "date": "2024-01-15",
+        "narration": "Groceries",
+        "postings": [json.loads(p) for p in POSTINGS],
+    }
+
+    code, out, err = run("exec", stdin=json.dumps(line) + "\n")
+
+    envelope = json.loads(out.splitlines()[0])
+    assert code == 0, envelope
+    assert envelope["data"]["file"] == str(target)
+    assert "Groceries" in target.read_text()
+    assert not (tmp_path / "inbox").exists()
+    assert err == ""
+
+
+def test_service_target_wins_over_pattern(tmp_path):
+    ledger = _ledger(tmp_path, "inbox/{year}.beancount")
+    target = tmp_path / "other.beancount"
+    target.write_text("")
+
+    written = TransactionService(ledger).add_transaction(_tx(), target_file=target)
+
+    assert written == target
+    assert "Groceries" in target.read_text()
+    assert not (tmp_path / "inbox").exists()
+
+
+def test_service_malformed_pattern_with_target_raises(tmp_path):
+    ledger = _ledger(tmp_path, "inbox/{week}.beancount")
+    target = tmp_path / "other.beancount"
+    target.write_text("")
+
+    with pytest.raises(InvalidLedgerOptionError):
+        TransactionService(ledger).add_transaction(_tx(), target_file=target)
+
+    assert target.read_text() == ""

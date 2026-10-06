@@ -117,7 +117,10 @@ class AddArgs(LedgerArgs):
     tags: tuple[str, ...] = Flag(default=(), description="Tag, without '#'; repeat for more")
     links: tuple[str, ...] = Flag(default=(), description="Link, without '^'; repeat for more")
     draft: bool = Flag(default=False, description="Mark as pending (!)")
-    target: Path | None = Flag(default=None, description="Write to this file instead")
+    target: Path | None = Flag(
+        default=None,
+        description="Write to this file instead, even when the ledger sets new_transaction_file",
+    )
     dry_run: bool = Flag(default=False, description="Show the entry, write nothing")
 
     def __post_init__(self) -> None:

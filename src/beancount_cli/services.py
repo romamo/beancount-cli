@@ -317,9 +317,12 @@ class TransactionService:
     ) -> Path:
         """
         Write already-rendered transaction text and return the file it was written to.
+
+        An explicit target_file wins over the ledger's new_transaction_file pattern, which is
+        still resolved first so a malformed one raises InvalidLedgerOptionError.
         """
         target_path = self.inbox_path(tx)
-        if target_path is None:
+        if target_file is not None or target_path is None:
             actual_target = target_file or self.ledger_file
             with open(actual_target, "a") as f:
                 f.write("\n" + entry_str)
