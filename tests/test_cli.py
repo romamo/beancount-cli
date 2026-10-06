@@ -3,6 +3,8 @@ import json
 import textwrap
 from unittest.mock import patch
 
+import pytest
+
 from beancount_cli.cli import main
 
 
@@ -80,6 +82,28 @@ def test_transaction_add_json(temp_beancount_file):
 
     check_code, check_out, check_err = run_cli("check", str(temp_beancount_file))
     assert check_code in (0, None)
+
+
+def test_transaction_add_refuses_unbalanced_postings(temp_beancount_file):
+    # Regression for #16: a one-sided transaction used to be written with exit 0.
+    before = temp_beancount_file.read_text()
+    postings = json.dumps(
+        [{"account": "Expenses:Food", "units": {"number": "12.50", "currency": "USD"}}]
+    )
+    with pytest.raises(ValueError, match=r"Transaction does not balance: \(12\.50 USD\)"):
+        run_cli(
+            "transaction",
+            "add",
+            "--file",
+            str(temp_beancount_file),
+            "--date",
+            "2024-03-01",
+            "--narration",
+            "Bad",
+            "--postings",
+            postings,
+        )
+    assert temp_beancount_file.read_text() == before
 
 
 def test_account_create(temp_beancount_file):

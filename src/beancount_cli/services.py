@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from beancount import loader
-from beancount.core import data
+from beancount.core import data, interpolate
 from beancount.parser import printer
 
 from beancount_cli.adapters import (
     from_core_transaction,
     to_core_balance,
     to_core_pad,
+    to_core_posting,
     to_core_transaction,
 )
 from beancount_cli.models import (
@@ -165,6 +166,14 @@ class ValidationService:
                 # skip when no commodities are declared so we don't false-positive on plain ledgers.
                 if valid_commodities:
                     errors.append(f"Currency '{p.units.currency}' not in declared commodities.")
+
+        # Same check `bean check` runs: the postings' weights (at cost or price
+        # when given) must sum to zero within the tolerance inferred from them.
+        postings = [to_core_posting(p) for p in tx.postings]
+        residual = interpolate.compute_residual(postings)
+        tolerances = interpolate.infer_tolerances(postings, self.ledger.options)
+        if not residual.is_small(tolerances):
+            errors.append(f"Transaction does not balance: {residual}")
 
         return errors
 
