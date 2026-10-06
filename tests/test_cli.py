@@ -1,201 +1,276 @@
-import io
 import json
 import textwrap
-from unittest.mock import patch
 
-import pytest
+from cli_helpers import call, run
 
-from beancount_cli.cli import main
-
-
-def run_cli(*args):
-    with patch("sys.stdout", new=io.StringIO()) as stdout:
-        with patch("sys.stderr", new=io.StringIO()) as stderr:
-            try:
-                main(list(args))
-                return 0, stdout.getvalue(), stderr.getvalue()
-            except SystemExit as e:
-                code = e.code if e.code is not None else 0
-                return code, stdout.getvalue(), stderr.getvalue()
+POSTINGS = [
+    {"account": "Assets:Cash", "units": {"number": "-10", "currency": "USD"}},
+    {"account": "Expenses:Food", "units": {"number": "10", "currency": "USD"}},
+]
 
 
 def test_check_command(temp_beancount_file):
-    code, out, err = run_cli("check", str(temp_beancount_file))
-    assert code in (0, None)
-    data = json.loads(out)["data"]
-    assert data == {"file": str(temp_beancount_file), "valid": True, "errors": []}
+    env = call("check", ledger_file=str(temp_beancount_file))
+    assert env.exit_code == 0
+    assert env.data == {"file": str(temp_beancount_file), "valid": True, "errors": []}
 
-    code, out, err = run_cli("check", str(temp_beancount_file), "-o", "table")
-    assert code in (0, None)
-    assert "No errors found" in out
+    code, out, _ = run("check", str(temp_beancount_file), "--format", "plain")
+    assert code == 0
+    assert out == "No errors found.\n"
+
+
+def test_check_reports_ledger_errors(temp_beancount_file):
+    with open(temp_beancount_file, "a") as f:
+        f.write("\n2022-01-01 INVALID_STATEMENT\n")
+    env = call("check", ledger_file=str(temp_beancount_file))
+    assert env.exit_code == 80
+    assert env.error.code == "LEDGER_INVALID"
+    assert env.data["valid"] is False
+    assert env.data["errors"]
+    assert env.error.context["errors"] == env.data["errors"]
+
+
+def test_missing_ledger_file_is_not_found(tmp_path):
+    env = call("check", ledger_file=str(tmp_path / "nope.beancount"))
+    assert env.exit_code == 5
+    assert env.error.code == "NOT_FOUND"
+    assert env.error.message.startswith("Ledger file not found")
+
+
+def test_file_defaults_to_beancount_file_env(temp_beancount_file):
+    code, out, err = run("account", "list")
+    assert code == 5, err
+
+    from beancount_cli.cli import app
+
+    env = app.call("account.list", {}, env={"BEANCOUNT_FILE": str(temp_beancount_file)})
+    assert env.exit_code == 0
+    assert [a["name"] for a in env.data] == ["Assets:Cash", "Expenses:Food", "Income:Salary"]
 
 
 def test_transaction_list(temp_beancount_file):
-    code, out, err = run_cli("transaction", "list", "--file", str(temp_beancount_file))
-    assert code in (0, None)
-    assert "Employer" in out
+    env = call("transaction.list", file=str(temp_beancount_file))
+    assert env.exit_code == 0
+    assert [tx["payee"] for tx in env.data] == ["Employer"]
+    # Postings keep their ledger order
+    assert [p["account"] for p in env.data[0]["postings"]] == ["Income:Salary", "Assets:Cash"]
 
 
 def test_transaction_list_fields(temp_beancount_file):
-    code, out, err = run_cli(
-        "transaction",
-        "list",
-        "--file",
-        str(temp_beancount_file),
-        "--format",
-        "json",
-        "--fields",
-        "date,payee",
+    code, out, err = run(
+        "transaction", "list", "--file", str(temp_beancount_file), "--fields", "date,payee"
     )
-    assert code in (0, None)
-    data = json.loads(out)
-    # Check that only date and payee are present (plus any standard agentyper wrapper)
-    # If agentyper wraps it in {"ok": true, "data": [...]}:
-    txs = data["data"]
-    if isinstance(txs, list):
-        for tx in txs:
-            assert set(tx.keys()) == {"date", "payee"}
-    else:
-        assert set(txs.keys()) == {"date", "payee"}
+    assert code == 0, err
+    assert json.loads(out)["data"] == [{"date": "2023-01-01", "payee": "Employer"}]
 
 
-def test_transaction_add_json(temp_beancount_file):
-    postings = json.dumps(
-        [
-            {"account": "Assets:Cash", "units": {"number": -10, "currency": "USD"}},
-            {"account": "Expenses:Food", "units": {"number": 10, "currency": "USD"}},
-        ]
-    )
-    code, out, err = run_cli(
-        "transaction",
-        "add",
-        "--file",
-        str(temp_beancount_file),
-        "--date",
-        "2023-12-01",
-        "--narration",
-        "CLI Test",
-        "--postings",
-        postings,
-    )
-    assert code in (0, None)
+def test_transaction_list_bad_query(temp_beancount_file):
+    env = call("transaction.list", file=str(temp_beancount_file), where="bogus ~~ 1")
+    assert env.exit_code == 82
+    assert env.error.code == "QUERY_INVALID"
 
-    check_code, check_out, check_err = run_cli("check", str(temp_beancount_file))
-    assert check_code in (0, None)
+
+def test_transaction_add(temp_beancount_file):
+    env = call(
+        "transaction.add",
+        file=str(temp_beancount_file),
+        date="2023-12-01",
+        narration="CLI Test",
+        postings=POSTINGS,
+        tags=["food"],
+    )
+    assert env.exit_code == 0, env.error
+    assert env.data["effect"] == "created"
+    assert env.data["tags"] == ["food"]
+    assert call("check", ledger_file=str(temp_beancount_file)).exit_code == 0
+
+
+def test_transaction_add_postings_on_argv(temp_beancount_file):
+    code, out, err = run(
+        "transaction", "add", "--file", str(temp_beancount_file),
+        "--date", "2023-12-01", "--narration", "Argv",
+        "--postings", json.dumps(POSTINGS[0]), "--postings", json.dumps(POSTINGS[1]),
+    )  # fmt: skip
+    assert code == 0, err
+    data = json.loads(out)["data"]
+    assert [p["account"] for p in data["postings"]] == ["Assets:Cash", "Expenses:Food"]
+
+
+def test_transaction_add_rejects_bad_account(temp_beancount_file):
+    env = call(
+        "transaction.add",
+        file=str(temp_beancount_file),
+        date="2023-12-01",
+        narration="Bad",
+        postings=[{"account": "cash", "units": {"number": "1", "currency": "USD"}}],
+    )
+    assert env.exit_code == 2
+    assert env.error.errors[0]["field"] == "postings[0].account"
 
 
 def test_transaction_add_refuses_unbalanced_postings(temp_beancount_file):
     # Regression for #16: a one-sided transaction used to be written with exit 0.
     before = temp_beancount_file.read_text()
-    postings = json.dumps(
-        [{"account": "Expenses:Food", "units": {"number": "12.50", "currency": "USD"}}]
+    env = call(
+        "transaction.add",
+        file=str(temp_beancount_file),
+        date="2024-03-01",
+        narration="Bad",
+        postings=[{"account": "Expenses:Food", "units": {"number": "12.50", "currency": "USD"}}],
     )
-    with pytest.raises(ValueError, match=r"Transaction does not balance: \(12\.50 USD\)"):
-        run_cli(
-            "transaction",
-            "add",
-            "--file",
-            str(temp_beancount_file),
-            "--date",
-            "2024-03-01",
-            "--narration",
-            "Bad",
-            "--postings",
-            postings,
-        )
+    assert env.exit_code == 81
+    assert env.error.code == "TRANSACTION_INVALID"
+    assert "Transaction does not balance: (12.50 USD)" in env.error.message
     assert temp_beancount_file.read_text() == before
 
 
 def test_account_create(temp_beancount_file):
-    code, out, err = run_cli(
-        "account",
-        "create",
-        "--file",
-        str(temp_beancount_file),
-        "--name",
-        "Liabilities:CreditCard",
-        "-c",
-        "USD",
+    env = call(
+        "account.create", file=str(temp_beancount_file), name="Liabilities:Card", currency=["USD"]
     )
-    assert code in (0, None)
+    assert env.exit_code == 0
+    assert env.data["effect"] == "created"
+    assert env.data["name"] == "Liabilities:Card"
+    assert env.data["currencies"] == ["USD"]
+    assert env.data["file"] == str(temp_beancount_file)
+    assert "open Liabilities:Card" in env.data["entry"]
+
+
+def test_account_create_existing_is_conflict(temp_beancount_file):
+    env = call("account.create", file=str(temp_beancount_file), name="Assets:Cash")
+    assert env.exit_code == 6
+    assert env.error.code == "ALREADY_EXISTS"
+
+
+def test_account_create_with_date_and_currencies(temp_beancount_file):
+    code, out, err = run(
+        "account", "create", "-f", str(temp_beancount_file), "-n", "Assets:Savings",
+        "-d", "2024-01-01", "-c", "USD", "-c", "EUR",
+    )  # fmt: skip
+    assert code == 0, err
     data = json.loads(out)["data"]
-    assert data["effect"] == "created"
-    assert data["name"] == "Liabilities:CreditCard"
-    assert data["file"] == str(temp_beancount_file)
-    assert "open Liabilities:CreditCard" in data["entry"]
+    assert data["open_date"] == "2024-01-01"
+    assert data["currencies"] == ["EUR", "USD"]
+
+
+def test_account_balance_on_unknown_account(temp_beancount_file):
+    env = call(
+        "account.balance",
+        file=str(temp_beancount_file),
+        account="Assets:Nope",
+        date="2024-01-01",
+        amount="1",
+        currency="USD",
+    )
+    assert env.exit_code == 5
+    assert env.error.code == "NOT_FOUND"
 
 
 def test_commodity_create(temp_beancount_file):
-    code, out, err = run_cli(
-        "commodity", "create", "ETH", "--file", str(temp_beancount_file), "--name", "Ethereum"
-    )
-    assert code in (0, None)
-    data = json.loads(out)["data"]
-    assert data["effect"] == "created"
-    assert data["currency"] == "ETH"
-    assert data["meta"] == {"name": "Ethereum"}
+    env = call("commodity.create", currency="ETH", file=str(temp_beancount_file), name="Ethereum")
+    assert env.exit_code == 0
+    assert env.data["effect"] == "created"
+    assert env.data["currency"] == "ETH"
+    assert env.data["meta"] == {"name": "Ethereum"}
+
+    again = call("commodity.create", currency="ETH", file=str(temp_beancount_file))
+    assert again.exit_code == 6
 
 
 def test_tree_command(temp_beancount_file):
-    code, out, err = run_cli("tree", str(temp_beancount_file))
-    assert code in (0, None)
-    assert str(temp_beancount_file) in out
+    env = call("tree", ledger_file=str(temp_beancount_file))
+    assert env.exit_code == 0
+    assert env.data == {"file": str(temp_beancount_file), "includes": []}
+
+    code, out, _ = run("tree", str(temp_beancount_file), "--format", "plain")
+    assert code == 0
+    assert out == f"{temp_beancount_file}\n"
 
 
-def test_report_aliases(temp_beancount_file):
-    code, out, err = run_cli(
-        "report", "balance-sheet", "--file", str(temp_beancount_file), "-o", "table"
+def test_tree_lists_includes_depth_first(tmp_path):
+    (tmp_path / "a.beancount").write_text('include "b.beancount"\n')
+    (tmp_path / "b.beancount").write_text("")
+    (tmp_path / "main.beancount").write_text('include "a.beancount"\n')
+    env = call("tree", ledger_file=str(tmp_path / "main.beancount"))
+    assert [(f["path"], f["depth"]) for f in env.data["includes"]] == [
+        (str(tmp_path / "a.beancount"), 0),
+        (str(tmp_path / "b.beancount"), 1),
+    ]
+
+
+def test_report_balance_sheet(temp_beancount_file):
+    env = call("report.balance-sheet", file=str(temp_beancount_file))
+    assert env.exit_code == 0
+    assert {"account": "Assets:Cash", "units": {"USD": "1000.00"}, "cost": {"USD": "1000.00"}} in (
+        env.data["accounts"]
     )
-    assert code in (0, None)
-    assert "Balance Sheet" in out
 
-    code, out, err = run_cli(
-        "report", "trial-balance", "--file", str(temp_beancount_file), "-o", "table"
+    code, out, _ = run(
+        "report", "balance-sheet", "-f", str(temp_beancount_file), "--format", "plain"
     )
-    assert code in (0, None)
+    assert code == 0
+    assert out.startswith("Balance Sheet\n")
+
+
+def test_report_trial_balance(temp_beancount_file):
+    env = call("report.trial-balance", file=str(temp_beancount_file))
+    assert env.exit_code == 0
+    assert env.data["net_positions"] == [
+        {
+            "currency": "USD",
+            "debit": "1000.00",
+            "credit": "-1000.00",
+            "net": "0.00",
+            "balanced": True,
+        }
+    ]
+
+    code, out, _ = run(
+        "report", "trial-balance", "-f", str(temp_beancount_file), "--format", "plain"
+    )
+    assert code == 0
     assert "Trial Balance" in out
-
-    code, out, err = run_cli("tree", str(temp_beancount_file))
-    assert code in (0, None)
-    assert str(temp_beancount_file) in out
+    assert "✓ Balanced" in out
 
 
 def test_report_holdings(temp_beancount_file):
-    code, out, err = run_cli(
-        "report", "holdings", "--file", str(temp_beancount_file), "-o", "table"
-    )
-    assert code in (0, None)
+    env = call("report.holdings", file=str(temp_beancount_file))
+    assert env.exit_code == 0
+    assert env.data["currencies"] == ["USD"]
+    assert env.data["accounts"][0]["account"] == "Assets:Cash"
+
+    code, out, _ = run("report", "holdings", "-f", str(temp_beancount_file), "--format", "plain")
+    assert code == 0
     assert "Holdings" in out
+
+
+AUDIT_LEDGER = """
+    option "operating_currency" "USD"
+    2020-01-01 open Assets:Cash USD
+    2020-01-01 open Expenses:Food USD
+
+    2020-02-01 * "Store A" "Oldest"
+      Expenses:Food          100 USD
+      Assets:Cash           -100 USD
+
+    2020-02-15 * "Store B" "Middle"
+      Expenses:Food          200 USD
+      Assets:Cash           -200 USD
+
+    2020-03-01 * "Store C" "Newest"
+      Expenses:Food          300 USD
+      Assets:Cash           -300 USD
+"""
 
 
 def test_report_audit(tmp_path):
     path = tmp_path / "audit.beancount"
-    path.write_text(
-        textwrap.dedent(
-            """
-        option "operating_currency" "USD"
-        2020-01-01 open Assets:Cash USD
-        2020-01-01 open Expenses:Food USD
-        
-        2020-02-01 * "Store A" "Oldest"
-          Expenses:Food          100 USD
-          Assets:Cash           -100 USD
+    path.write_text(textwrap.dedent(AUDIT_LEDGER))
 
-        2020-02-15 * "Store B" "Middle"
-          Expenses:Food          200 USD
-          Assets:Cash           -200 USD
-
-        2020-03-01 * "Store C" "Newest"
-          Expenses:Food          300 USD
-          Assets:Cash           -300 USD
-    """
-        )
+    code, out, err = run(
+        "report", "audit", "--file", str(path), "--currency", "USD", "--all", "--format", "plain"
     )
-    # Test all transactions (older to newest)
-    code, out, err = run_cli(
-        "report", "audit", "--file", str(path), "--currency", "USD", "--all", "-o", "table"
-    )
-    assert code in (0, None)
+    assert code == 0, err
     assert "Audit Report: USD" in out
     lines = [line for line in out.splitlines() if "Store" in line]
     assert len(lines) == 6
@@ -203,99 +278,64 @@ def test_report_audit(tmp_path):
     assert "Store B" in lines[2]
     assert "Store C" in lines[4]
 
-    # Test limit (should show LAST 2 transactions in chronological order: Middle -> Newest)
-    code, out, err = run_cli(
-        "report", "audit", "--file", str(path), "--currency", "USD", "--limit", "2", "-o", "table"
-    )
-    assert code in (0, None)
+    # The last 2 transactions, oldest first
+    code, out, err = run(
+        "report", "audit", "--file", str(path), "--currency", "USD", "--limit", "2",
+        "--format", "plain",
+    )  # fmt: skip
+    assert code == 0, err
     lines = [line for line in out.splitlines() if "Store" in line]
     assert len(lines) == 4
     assert "Store B" in lines[0]
     assert "Store C" in lines[2]
     assert "Showing last 2 transactions" in out
 
+    env = call("report.audit", file=str(path), limit=2)
+    assert env.data["currency"] == "USD"
+    assert env.data["limited"] is True
+    assert [p["description"] for p in env.data["postings"]] == ["Store B: Middle"] * 2 + [
+        "Store C: Newest"
+    ] * 2
+
+
+def test_report_audit_needs_a_currency(clean_ledger_file):
+    env = call("report.audit", file=str(clean_ledger_file))
+    assert env.exit_code == 83
+    assert env.error.code == "CURRENCY_REQUIRED"
+
 
 def test_tx_schema():
-    code, out, err = run_cli("transaction", "add", "--schema")
-    assert code in (0, None)
-    assert "properties" in out
+    code, out, _ = run("transaction", "add", "--schema")
+    assert code == 0
+    assert "postings" in json.loads(out)["data"]["parameters"]
 
 
 def test_account_list(temp_beancount_file):
-    code, out, err = run_cli("account", "list", "--file", str(temp_beancount_file))
-    assert code in (0, None)
+    code, out, _ = run("account", "list", "--file", str(temp_beancount_file), "--format", "plain")
+    assert code == 0
     assert "Assets:Cash" in out
 
 
-def test_format_cmd(temp_beancount_file, monkeypatch):
-    import subprocess
-
-    def mock_run(*args, **kwargs):
-        class MockResult:
-            stdout = ""
-
-        cmd_list = args[0]
-        if "-o" in cmd_list:
-            out_idx = cmd_list.index("-o") + 1
-            with open(cmd_list[out_idx], "w") as f:
-                f.write("; formatted content\n")
-        return MockResult()
-
-    monkeypatch.setattr(subprocess, "run", mock_run)
-    code, out, err = run_cli("format", str(temp_beancount_file))
-    assert code in (0, None)
-    data = json.loads(out)["data"]
-    assert data == {"effect": "updated", "file": str(temp_beancount_file), "changed": True}
-    assert temp_beancount_file.read_text() == "; formatted content\n"
+def test_price_group_help():
+    code, _, err = run("price", "--help")
+    assert code == 0
+    assert "check" in err and "fetch" in err
 
 
-def test_price_cmd(temp_beancount_file):
-    # `price` is now a subcommand group; calling it without a subcommand shows help
-    code, out, err = run_cli("price", "--help")
-    assert code in (0, None)
-    assert "check" in (out + err) or "fetch" in (out + err)
+def test_report_audit_help_shows_its_flags():
+    code, _, err = run("report", "audit", "--help")
+    assert code == 0
+    assert "--limit" in err
+    assert "--all" in err
 
 
-def test_missing_ledger_file(monkeypatch):
-    import os
-
-    if "BEANCOUNT_FILE" in os.environ:
-        monkeypatch.delenv("BEANCOUNT_FILE")
-    if "BEANCOUNT_PATH" in os.environ:
-        monkeypatch.delenv("BEANCOUNT_PATH")
-
-    code, out, err = run_cli("check", "doesnt_exist_file.beancount")
-    assert code == 1  # EXIT_SYSTEM
-    assert "Traceback" not in err
+def test_account_list_csv(temp_beancount_file):
+    code, out, err = run("account", "list", "-f", str(temp_beancount_file), "--format", "csv")
+    assert code == 0, err
+    assert out.splitlines()[0] == "name,open_date,currencies,meta"
 
 
-def test_report_holdings_help_hides_audit_only_flags():
-    code, out, err = run_cli("report", "holdings", "--help")
-    assert code in (0, None)
-    assert "--limit" not in out
-    assert "--all" not in out
-
-
-def test_report_audit_help_shows_audit_only_flags():
-    code, out, err = run_cli("report", "audit", "--help")
-    assert code in (0, None)
-    assert "--limit" in (out + err)
-    assert "--all" in (out + err)
-
-
-def test_output_json_returns_model_fields(temp_beancount_file):
-    """--output json, -o json, --json and --format json must all give the same data."""
-    variants = (["--output", "json"], ["-o", "json"], ["--json"], ["--format", "json"])
-    results = []
-    for flags in variants:
-        code, out, err = run_cli("account", "list", "--file", str(temp_beancount_file), *flags)
-        assert code in (0, None), err
-        results.append(json.loads(out)["data"])
-    assert all(r == results[0] for r in results)
-    assert {"name", "open_date"} <= set(results[0][0])
-
-
-def test_non_tty_default_is_structured_json(temp_beancount_file):
-    code, out, err = run_cli("report", "balance-sheet", "--file", str(temp_beancount_file))
-    assert code in (0, None), err
+def test_non_tty_default_is_json_envelope(temp_beancount_file):
+    code, out, err = run("report", "balance-sheet", "--file", str(temp_beancount_file))
+    assert code == 0, err
     assert json.loads(out)["ok"] is True

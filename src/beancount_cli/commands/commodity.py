@@ -1,125 +1,176 @@
-import logging
-import sys
-from datetime import date
+import datetime
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Literal
 
-import agentyper as typer
 from beancount.core import data
 from beancount.parser import parser as bp_parser
 from beancount.parser import printer
-from rich.markup import escape
+from treaty import Arg, Ctx, Exit, Flag, Format, Out, already_exists
 
-from beancount_cli.commands.common import (
-    _is_table_format,
-    console,
-    emit,
-    error_console,
-    get_ledger_file,
-    read_stdin,
+from beancount_cli.app import LedgerArgs, app, ledger_path, render_rows, text
+from beancount_cli.models import (
+    CommodityImportResult,
+    CommodityModel,
+    CurrencyCode,
+    UndeclaredCommodityModel,
 )
-from beancount_cli.models import CommodityModel
 from beancount_cli.services import CommodityService
 
-app = typer.Agentyper(help="Manage commodities.")
+commodity = app.group("commodity", description="Manage commodities")
 
 
-@app.command(name="list")
-def commodity_list(
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-    asset_class: str | None = typer.Option(
-        None, "--asset-class", "-c", help="Filter by asset-class meta (e.g. stock, Cash)"
-    ),
-):
-    """List all commodities."""
-    actual_file = get_ledger_file(file)
-    service = CommodityService(actual_file)
-    commodities = service.list_commodities(asset_class=asset_class)
-
-    if _is_table_format():
-        data = [
-            {
-                "Currency": c.currency,
-                "Date": str(c.date) if c.date else "",
-                "Name": c.meta.get("name", "") if c.meta else "",
-            }
-            for c in commodities
-        ]
-        typer.output(data, title=f"Commodities ({len(commodities)})")
-    else:
-        typer.output(commodities, title=f"Commodities ({len(commodities)})")
+@dataclass(frozen=True, slots=True)
+class ListArgs(LedgerArgs):
+    asset_class: str | None = Flag(
+        default=None, short="c", description="Filter by asset-class meta (e.g. stock, Cash)"
+    )
 
 
-@app.command(name="check")
-def commodity_check(
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-):
-    """Check for currencies used in transactions but missing a commodity directive."""
-    actual_file = get_ledger_file(file)
-    service = CommodityService(actual_file)
-    undeclared = service.get_undeclared_commodities()
-
-    if _is_table_format():
-        if not undeclared:
-            console.print("[green]All used currencies are declared.[/green]")
-        else:
-            typer.output(undeclared, title=f"Undeclared Commodities ({len(undeclared)})")
-    else:
-        typer.output(undeclared, title="Undeclared Commodities")
+def render_list(data: Sequence[Mapping[str, Any]]) -> str:
+    rows = [[text(c, "currency"), text(c, "date"), text(c.get("meta") or {}, "name")] for c in data]
+    return render_rows(f"Commodities ({len(rows)})", ["Currency", "Date", "Name"], rows)
 
 
-@app.command(name="export")
-def commodity_export(
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-    asset_class: str | None = typer.Option(
-        None, "--asset-class", "-c", help="Filter by asset-class meta (e.g. stock, Cash)"
-    ),
-    output_file: Path | None = typer.Option(
-        None, "--output-file", help="Write output to file (default: commodities_file or stdout)"
-    ),
-):
-    """Export commodities as beancount directives."""
-    actual_file = get_ledger_file(file)
-    service = CommodityService(actual_file)
-    commodities = service.list_commodities(asset_class=asset_class)
+@commodity.command(
+    "list",
+    description="List all commodities",
+    danger_level="safe",
+    exit_codes=["NOT_FOUND"],
+    examples=[("List the stocks", "bean commodity list --asset-class stock")],
+    sort_key="currency",
+    renderers={Format.PLAIN: render_list},
+)
+def commodity_list(args: ListArgs, ctx: Ctx) -> list[CommodityModel]:
+    service = CommodityService(ledger_path(args.file, ctx))
+    return service.list_commodities(asset_class=args.asset_class)
 
+
+def render_check(data: Sequence[Mapping[str, Any]]) -> str:
+    if not data:
+        return "All used currencies are declared.\n"
+    rows = [[text(c, "currency")] for c in data]
+    return render_rows(f"Undeclared Commodities ({len(rows)})", ["Currency"], rows)
+
+
+@commodity.command(
+    "check",
+    description="List currencies used in transactions but missing a commodity directive",
+    danger_level="safe",
+    exit_codes=["NOT_FOUND"],
+    examples=[("Find undeclared currencies", "bean commodity check")],
+    sort_key="currency",
+    renderers={Format.PLAIN: render_check},
+)
+def commodity_check(args: LedgerArgs, ctx: Ctx) -> list[UndeclaredCommodityModel]:
+    return CommodityService(ledger_path(args.file, ctx)).get_undeclared_commodities()
+
+
+@dataclass(frozen=True, slots=True)
+class ExportArgs(ListArgs):
+    output_file: Path | None = Flag(
+        default=None,
+        description="Write here; default the ledger's commodities_file, else return the text",
+    )
+    dry_run: bool = Flag(default=False, description="Report what would be written, write nothing")
+
+
+@dataclass(frozen=True, slots=True)
+class Exported:
+    effect: Literal["created", "updated", "noop", "would_create", "would_update"]
+    file: Path | None
+    count: int
+    entry: str
+
+
+def render_export(data: Mapping[str, Any]) -> str:
+    if data.get("file") is None:
+        return text(data, "entry")
+    verb = "Would export" if str(data.get("effect", "")).startswith("would_") else "Exported"
+    return f"{verb} {text(data, 'count')} commodities → {text(data, 'file')}\n"
+
+
+@commodity.command(
+    "export",
+    description="Export commodities as beancount directives",
+    danger_level="mutating",
+    exit_codes=["NOT_FOUND"],
+    examples=[("Write the stocks to a file", "bean commodity export -c stock --output-file s.bc")],
+    renderers={Format.PLAIN: render_export},
+)
+def commodity_export(args: ExportArgs, ctx: Ctx) -> Exported:
+    service = CommodityService(ledger_path(args.file, ctx))
+    commodities = service.list_commodities(asset_class=args.asset_class)
     content = "\n".join(service._format_commodity_block(c) for c in commodities)
 
-    dest = output_file or service.ledger_service.get_commodities_file()
-    if dest:
-        dest.write_text(content)
-        console.print(f"[green]Exported {len(commodities)} commodities →[/green] {dest}")
-    else:
-        sys.stdout.write(content)
+    dest = args.output_file or service.ledger_service.get_commodities_file()
+    if dest is None:
+        return Exported(effect="noop", file=None, count=len(commodities), entry=content)
+    if dest.exists() and dest.read_text() == content:
+        return Exported(effect="noop", file=dest, count=len(commodities), entry=content)
+    existed = dest.exists()
+    if args.dry_run:
+        return Exported(
+            effect="would_update" if existed else "would_create",
+            file=dest,
+            count=len(commodities),
+            entry=content,
+        )
+    dest.write_text(content)
+    return Exported(
+        effect="updated" if existed else "created",
+        file=dest,
+        count=len(commodities),
+        entry=content,
+    )
 
 
-@app.command(name="import", mutating=True)
-def commodity_import(
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
+@dataclass(frozen=True, slots=True)
+class ImportArgs(LedgerArgs):
+    output_file: Path | None = Flag(
+        default=None, description="Write here; default the ledger's commodities_file"
+    )
+    overwrite: bool = Flag(default=False, description="Replace commodities that already exist")
+    dry_run: bool = Flag(default=False, description="Report what would change, write nothing")
+
+
+@dataclass(frozen=True, slots=True)
+class Imported:
+    effect: Literal["created", "updated", "noop", "would_create", "would_update"]
+    file: Path | None
+    entry: str
+    results: list[CommodityImportResult] = Out(default_factory=list, ordered=True)
+
+
+def render_import(data: Mapping[str, Any]) -> str:
+    if data.get("file") is None and data.get("entry"):
+        return text(data, "entry")
+    prefix = "(dry-run) " if str(data.get("effect", "")).startswith("would_") else ""
+    lines = [f"{prefix}{r['action']:12} {r['currency']}\n" for r in data.get("results", [])]
+    if not lines:
+        lines.append("No commodity directives found.\n")
+    return "".join(lines)
+
+
+@commodity.command(
+    "import",
+    description=(
+        "Import commodity directives from stdin or --input-file into the commodities_file;"
+        " without one, return the new directives"
     ),
-    input_file: Path | None = typer.Option(
-        None, "--input-file", help="Read beancount directives from file instead of stdin"
-    ),
-    output_file: Path | None = typer.Option(
-        None, "--output-file", help="Write to file (default: commodities_file from ledger config)"
-    ),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing commodities"),
-    dry_run: bool = False,
-):
-    """Import commodity directives from stdin (or --input-file) into the commodities_file."""
-    stdin_text = Path(input_file).read_text() if input_file else read_stdin()
-    entries, errors, _ = bp_parser.parse_string(stdin_text)
+    danger_level="mutating",
+    exit_codes=["NOT_FOUND", "DIRECTIVES_INVALID"],
+    examples=[("Import a registry", "bean commodity import --input-file registry.beancount")],
+    stdin_input=True,
+    renderers={Format.PLAIN: render_import},
+)
+def commodity_import(args: ImportArgs, ctx: Ctx) -> Imported:
+    entries, errors, _ = bp_parser.parse_string(ctx.stdin_text or "")
     if errors:
-        typer.exit_error(
+        raise Exit.DIRECTIVES_INVALID(
             "Parse error: " + "; ".join(e.message for e in errors),
-            error_type="ParseError",
-            field="input",
+            context={"errors": [e.message for e in errors]},
         )
 
     commodities = [
@@ -128,84 +179,69 @@ def commodity_import(
         if isinstance(e, data.Commodity)
     ]
     if not commodities:
-        return emit(
-            {"results": [], "file": None, "entry": ""},
-            effect="noop",
-            human="[yellow]No commodity directives found in stdin.[/yellow]",
-        )
+        return Imported(effect="noop", file=None, entry="")
 
-    actual_file = get_ledger_file(file)
-    service = CommodityService(actual_file)
-    dest = output_file or service.ledger_service.get_commodities_file()
+    service = CommodityService(ledger_path(args.file, ctx))
+    dest = args.output_file or service.ledger_service.get_commodities_file()
+    if dest is not None and not dest.exists():
+        raise Exit.NOT_FOUND(f"commodities_file not found: {dest}", context={"file": str(dest)})
 
     results, commodities_file = service.import_commodities(
-        commodities, output_file=dest, overwrite=overwrite, dry_run=dry_run
+        commodities, output_file=dest, overwrite=args.overwrite, dry_run=args.dry_run
     )
     written = {r.currency for r in results if r.action != "skipped"}
     blocks = "".join(
         service._format_commodity_block(c) for c in commodities if str(c.currency) in written
     )
 
-    if not _is_table_format():
-        # Nothing reaches disk on a dry run or without a commodities_file (the
-        # blocks are returned instead), so those report a would_* effect.
-        applied = not dry_run and commodities_file is not None
-        if any(r.action == "overwritten" for r in results):
-            effect = "updated" if applied else "would_update"
-        elif written:
-            effect = "created" if applied else "would_create"
-        else:
-            effect = "noop"
-        return typer.result(
-            {
-                "results": [r.model_dump(mode="json") for r in results],
-                "file": str(commodities_file) if commodities_file else None,
-                "entry": blocks,
-            },
-            effect=effect,
-        )
-
-    stdout_mode = not dry_run and commodities_file is None
-    status_console = error_console if stdout_mode else console
-    verbose = logging.getLogger().isEnabledFor(logging.INFO)
-    prefix = "[dim](dry-run)[/dim] " if dry_run else ""
-    for r in results:
-        if not verbose and not dry_run and r.action == "skipped":
-            continue
-        color = {"added": "green", "overwritten": "yellow", "skipped": "dim"}.get(r.action, "white")
-        status_console.print(f"{prefix}[{color}]{r.action:12}[/{color}] {r.currency}")
-
-    if dry_run:
-        return
-
-    if commodities_file:
-        console.print(f"\n[green]Done →[/green] {commodities_file}")
+    # Without a commodities_file nothing reaches disk: the blocks are returned in entry
+    effect: Literal["created", "updated", "noop", "would_create", "would_update"]
+    if not written or (commodities_file is None and not args.dry_run):
+        effect = "noop"
+    elif any(r.action == "overwritten" for r in results):
+        effect = "would_update" if args.dry_run else "updated"
     else:
-        # No destination configured — stream added/overwritten entries to stdout
-        sys.stdout.write(blocks)
+        effect = "would_create" if args.dry_run else "created"
+    return Imported(effect=effect, file=commodities_file, entry=blocks, results=results)
 
 
-@app.command(name="create", mutating=True)
-def commodity_create(
-    currency: str = typer.Argument(..., help="Currency code (e.g. USD)"),
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-    name: str | None = typer.Option(None, "--name", "-n", help="Full name"),
-    dry_run: bool = False,
-):
-    """Create a new commodity."""
-    meta = {"name": name} if name else {}
-    entry = printer.format_entry(data.Commodity(meta=meta, date=date.today(), currency=currency))
-    result = {"currency": currency, "meta": meta, "entry": entry}
-    if dry_run:
-        return emit({**result, "file": None}, effect="would_create", human=escape(entry))
-    try:
-        written = CommodityService(get_ledger_file(file)).create_commodity(currency, name=name)
-    except ValueError as e:
-        typer.exit_error(str(e))
-    return emit(
-        {**result, "file": str(written)},
-        effect="created",
-        human=f"[green]Commodity {escape(currency)} created in {escape(str(written))}.[/green]",
-    )
+@dataclass(frozen=True, slots=True)
+class CreateArgs(LedgerArgs):
+    currency: CurrencyCode = Arg(description="Currency code (e.g. USD)")
+    name: str | None = Flag(default=None, short="n", description="Full name")
+    dry_run: bool = Flag(default=False, description="Show the entry, write nothing")
+
+
+class CommodityWritten(CommodityModel):
+    effect: Literal["created", "would_create"]
+    file: Path | None
+    entry: str
+
+
+def render_create(data: Mapping[str, Any]) -> str:
+    if data.get("file") is None:
+        return text(data, "entry")
+    return f"Commodity {text(data, 'currency')} created in {text(data, 'file')}.\n"
+
+
+@commodity.command(
+    "create",
+    description="Declare a new commodity",
+    danger_level="mutating",
+    exit_codes=["NOT_FOUND", "CONFLICT"],
+    examples=[("Declare Ethereum", "bean commodity create ETH --name Ethereum")],
+    renderers={Format.PLAIN: render_create},
+)
+def commodity_create(args: CreateArgs, ctx: Ctx) -> CommodityWritten:
+    meta = {"name": args.name} if args.name else {}
+    today = datetime.date.today()
+    model = CommodityModel(currency=args.currency, date=today, meta=meta)
+    entry = printer.format_entry(data.Commodity(meta=meta, date=today, currency=str(args.currency)))
+    fields = model.model_dump()
+    if args.dry_run:
+        return CommodityWritten(**fields, effect="would_create", file=None, entry=entry)
+    service = CommodityService(ledger_path(args.file, ctx))
+    if str(args.currency) in service.ledger_service.get_commodities():
+        raise already_exists({"currency": str(args.currency)}, conflict_id=str(args.currency))
+    written = service.create_commodity(args.currency, name=args.name)
+    return CommodityWritten(**fields, effect="created", file=written, entry=entry)

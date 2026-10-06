@@ -11,29 +11,30 @@ This document provides instructions for **AI Agents** operating the Beancount CL
 If you are executing shell commands to help a human analyze or modify their `main.beancount` ledger, adhere to the following operational rules:
 
 ### Core Configuration & Bootstrapping
-- **Ledger Path**: The CLI requires a target `.beancount` file. You can either pass it directly via `--file /path/to/main.beancount` or set the environment variable: `export BEANCOUNT_FILE=/path/to/main.beancount`.
-- **Self Discovery**: If you are unsure about the available arguments for a command, ALWAYS run `uv run bean <command> --help` to read the descriptive schemas and examples embedded directly in the source code.
+- **Ledger Path**: The CLI requires a target `.beancount` file. Pass it with `--file /path/to/main.beancount` (or `-f`), or set `BEANCOUNT_FILE` (`BEAN_FILE` also works and wins when both are set). Without either, `./main.beancount` is used.
+- **Flag Order**: Flags go after the command path: `uv run bean account list --format json`. A flag before the command exits `2` with a suggestion showing the right order.
+- **Self Discovery**: `uv run bean manifest` describes every command, flag, output schema, and exit code in one JSON document. For one command, run `uv run bean <command> --schema`, or `--help` for prose.
 
 ### Available Capabilities (High-Level)
-- **`account list/create/pad-balance`**: Create and list chart of accounts, or adjust a balance using a Pad directive.
-- **`transaction list/add`**: Query and batch insert accounting transactions.
-- **`commodity list/create/check`**: Manage currency rules and commodities. Use `check` to find used currencies missing a declaration.
-- **`price check/fetch`**: Manage price data and discovery.
+- **`account list/create/balance/pad-balance`**: List and open accounts, assert a balance, or adjust a balance using a Pad directive.
+- **`transaction list/add`**: Query and insert accounting transactions.
+- **`commodity list/create/check/import/export`**: Manage commodities. Use `check` to find used currencies missing a declaration.
+- **`price check/check-anomalies/fetch`**: Manage price data and discovery.
    - `check`: Identify periods of missing price data for held assets. Supports `--rate (daily, weekday, weekly, monthly)`.
-   - `fetch`: Wrapper for `bean-price` to fetch latest quotes. Supports `--update`, `--dry-run`, `--verbose`, `--inactive`, and `--update-fill-gaps`.
+   - `fetch`: Wrapper for `bean-price` to fetch latest quotes. Supports `--update`, `--dry-run`, `--inactive`, and `--fill-gaps`.
 - **`report`**: Generate detailed mathematical rollups (`balance-sheet`, `trial-balance`, `holdings`, `audit`).
-- **`format/tree`**: Maintain correct text indentation and view include trees.
-- **Single Item Retrieval**: Use `--format json` when you require nested, hierarchical data structures.
-- **Human Display**: The default format is `table`. Only use this if you are dumping the raw execution output directly to the user's terminal interface. 
+- **`check/format/tree`**: Validate the ledger, keep its text formatted, and view its include tree.
+
+### Output
+- **JSON envelope**: When stdout is not a terminal, every command answers with one JSON object: `{"ok": true|false, "data": ..., "error": ..., "warnings": [...], "meta": {...}}`. Read results from `data` and failures from `error.code`; `meta.exit_code` repeats the exit code.
+- **Effects**: Mutating commands report `data.effect`: `created`, `updated`, or `noop`, and `would_create` or `would_update` under `--dry-run` (then `meta.dry_run` is `true`). The written file is `data.file` and the directive text is `data.entry`.
+- **Fewer tokens**: `--fields date,payee` keeps only those keys; `--format csv` or `--format tsv` writes lists as rows.
+- **Lists are paginated**: `transaction list`, `account list`, `commodity list`, `commodity check`, `price check`, and `price check-anomalies` return 20 items by default. `meta.pagination.has_more` says whether more exist; pass `meta.pagination.next_cursor` as `--cursor`, or `--limit 0` for all.
+- **Human display**: `--format plain` (the default at a terminal) prints tables. Only use it if you are dumping the output directly to the user's terminal.
 
 ### Advanced Data Pipelines
-- **Schema Discovery**: If you need to know the exact parameters for a command, run:
-   ```bash
-   uv run bean transaction add --schema
-   uv run bean account create --schema
-   ```
-   This outputs the JSON schema for every argument.
 - **Native BQL**: `transaction list` supports Beancount Query Language (BQL) directly via the `--where` flag (e.g., `uv run bean transaction list --where "account ~ 'Expenses'"`).
+- **Postings**: on the command line each `--postings` takes one posting as a JSON object; repeat the flag for each posting. In `exec` lines and `--raw-payload`, `postings` is a JSON array.
 - **Batch Processing**: Never loop shell executions to insert items one-by-one! Use `bean exec` to dispatch a JSONL stream — one JSON object per line — that can mix any command type in a single pass:
    ```bash
    # Mixed-command JSONL stream written to the ledger
@@ -42,15 +43,7 @@ If you are executing shell commands to help a human analyze or modify their `mai
    # Same stream, preview without writing
    cat commands.jsonl | uv run bean exec --dry-run
    ```
-   Each line must have a `_cmd` field (e.g. `transaction.add`, `account.create`, `commodity.create`). Use `_opts` for per-line flag overrides (e.g. `{"_opts": {"draft": true}}`). Pass `--ignore-errors` to continue on failures.
-
-   Each processed line emits a structured JSON result to stdout:
-   ```json
-   {"ok": true,  "exit_code": 0, "line": 1, "cmd": "account.create", "result": {...}}
-   {"ok": false, "exit_code": 2, "line": 2, "cmd": "transaction.add", "stderr": "..."}
-   ```
-
-   Without `--ignore-errors`, `exec` stops at the first failing line and exits with that line's code. With it, every line runs and the run exits `3` if any line failed.
+   Each line must have a `_cmd` field naming the command by its dotted path (e.g. `transaction.add`, `account.create`, `commodity.create`). The other keys are the command's arguments, named as its flags with `_` for `-` (`pad_account`, `dry_run`). Each line answers with its own JSON envelope; `meta._line` is the line number.
 
    **`transaction.add` example payload:**
    ```json
@@ -59,16 +52,25 @@ If you are executing shell commands to help a human analyze or modify their `mai
 
 ### Exit Codes
 
-Since v0.3.0 the exit codes follow the CLI Agent Spec. Branch on the exit code, not on stderr text:
+Branch on the exit code or `error.code`, not on message text. Every command lists the codes it can return in `bean manifest` and `--schema`.
 
-| Code | Meaning | Examples | What to do |
+| Code | `error.code` | Meaning | What to do |
 |---|---|---|---|
-| `0` | Success | Any command that completed | Continue |
-| `1` | General or system error | Ledger file not found, unreadable file | Fix the environment (path, permissions); retrying unchanged will fail again |
-| `2` | Validation or argument error | Unknown flag or command, malformed `--date`, `check` finding ledger errors | Fix the input or the ledger and reissue |
-| `3` | Partial failure | `price fetch` where some sources failed (fetched prices are still written), `exec --ignore-errors` with a failed line | Read the output for which items failed; retry only those |
+| `0` | | Success | Continue |
+| `1` | e.g. `GENERAL_ERROR` | Unexpected failure | Inspect the error; retrying unchanged will likely fail again |
+| `2` | `ARG_ERROR` | Bad or missing argument, unknown flag or command; `error.errors` lists each problem with its `field` | Fix the input and reissue |
+| `3` | `PARTIAL_FAILURE` | `price fetch` where some sources failed; the fetched prices are still written and in `data` | Retry only the jobs in `data.errors` |
+| `5` | `NOT_FOUND` | Ledger file, account, or `commodities_file` does not exist | Fix the path or create the account |
+| `6` | `ALREADY_EXISTS` | `account create` or `commodity create` for one that exists | Nothing to do; it exists |
+| `80` | `LEDGER_INVALID` | `check` found ledger errors; `error.context.errors` lists them | Fix the ledger |
+| `81` | `TRANSACTION_INVALID` | `transaction add` names an account that is not open, or an undeclared currency | Open the account or declare the commodity |
+| `82` | `QUERY_INVALID` | `transaction list --where` with BQL that fails | Fix the query |
+| `83` | `CURRENCY_REQUIRED` | `report audit` without `--currency` on a ledger with no operating currency | Pass `--currency` |
+| `84` | `DIRECTIVES_INVALID` | `commodity import` input is not valid beancount | Fix the input |
+| `85` | `FORMAT_FAILED` | `bean-format` failed | Fix the ledger syntax |
+| `86` | `CONVERSION_FAILED` | A report could not convert to `--convert` | Add prices or drop `--convert` |
 
-Before v0.3.0, `2` and `3` were swapped: validation errors exited `3` and partial failures exited `2`. Check `uv run bean --version` if a script depends on them.
+Before v0.6.0 (the move to treaty), a missing ledger exited `1`, ledger errors exited `2`, and a failure envelope had `"error": true`.
 
 ## 2. Adjusting an Account Balance (Pad + Balance)
 
@@ -109,7 +111,7 @@ Produces in the ledger:
 ### Via `bean exec` (batch / agent pipelines)
 
 ```bash
-echo '{"_cmd": "account.pad-balance", "account": "Assets:BE:Wise:EUR", "amount": "1777", "currency": "EUR", "pad_account": "Expenses:Other", "balance_date": "2026-06-02"}' \
+echo '{"_cmd": "account.pad-balance", "account": "Assets:BE:Wise:EUR", "amount": "1777", "currency": "EUR", "pad_account": "Expenses:Other", "date": "2026-06-02"}' \
   | uv run bean exec
 ```
 

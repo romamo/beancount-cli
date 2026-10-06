@@ -1,83 +1,162 @@
-import json
+import datetime
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
+from typing import Any, Literal
 
-import agentyper as typer
-from rich.markup import escape
+from treaty import Ctx, Exit, Flag, Format
 
-from beancount_cli.commands.common import _is_table_format, emit, get_ledger_file
-from beancount_cli.models import TransactionModel
+from beancount_cli.app import LedgerArgs, app, ledger_path, render_rows, text
+from beancount_cli.models import (
+    AccountName,
+    AmountModel,
+    CostModel,
+    CurrencyCode,
+    PostingModel,
+    TransactionModel,
+)
 from beancount_cli.services import TransactionService
 
-app = typer.Agentyper(help="Manage transactions.")
+transaction = app.group("transaction", description="Manage transactions")
 
 
-@app.command(name="list")
-def tx_list(
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-    account: str | None = typer.Option(None, "--account", help="Filter by account regex"),
-    payee: str | None = typer.Option(None, "--payee", "-p", help="Filter by payee regex"),
-    tag: str | None = typer.Option(None, "--tag", "-t", help="Filter by tag"),
-    where: str | None = typer.Option(None, "--where", "-w", help="Custom BQL where clause"),
-    fields: str | None = typer.Option(
-        None, "--fields", help="Comma-separated fields to include in JSON output"
-    ),
-):
-    """List transactions matching filters."""
-    actual_file = get_ledger_file(file)
-    service = TransactionService(actual_file)
-    txs = service.list_transactions(
-        account_regex=account, payee_regex=payee, tag=tag, bql_where=where
+@dataclass(frozen=True, slots=True)
+class ListArgs(LedgerArgs):
+    account: str | None = Flag(default=None, description="Filter by account regex")
+    payee: str | None = Flag(default=None, short="p", description="Filter by payee regex")
+    tag: str | None = Flag(default=None, short="t", description="Filter by tag")
+    where: str | None = Flag(default=None, short="w", description="BQL where clause")
+
+
+def render_list(data: Sequence[Mapping[str, Any]]) -> str:
+    rows = [[text(tx, "date"), text(tx, "payee"), text(tx, "narration")] for tx in data]
+    return render_rows(f"Transactions ({len(rows)})", ["Date", "Payee", "Narration"], rows)
+
+
+@transaction.command(
+    "list",
+    description="List transactions matching the filters, oldest first",
+    danger_level="safe",
+    exit_codes=["NOT_FOUND", "QUERY_INVALID"],
+    examples=[
+        ("List grocery transactions", "bean transaction list --payee Store"),
+        ("Filter with BQL", "bean transaction list --where \"account ~ 'Expenses'\""),
+    ],
+    ordered=True,
+    renderers={Format.PLAIN: render_list},
+)
+def tx_list(args: ListArgs, ctx: Ctx) -> list[TransactionModel]:
+    service = TransactionService(ledger_path(args.file, ctx))
+    try:
+        return service.list_transactions(
+            account_regex=args.account, payee_regex=args.payee, tag=args.tag, bql_where=args.where
+        )
+    except ValueError as e:
+        raise Exit.QUERY_INVALID(str(e), context={"where": args.where}) from e
+
+
+@dataclass(frozen=True, slots=True)
+class AmountInput:
+    number: Decimal
+    currency: CurrencyCode
+
+
+@dataclass(frozen=True, slots=True)
+class CostInput:
+    number: Decimal
+    currency: CurrencyCode
+    date: datetime.date | None = None
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PostingInput:
+    account: AccountName
+    units: AmountInput
+    cost: CostInput | None = None
+    price: AmountInput | None = None
+    flag: str | None = None
+
+    def to_model(self) -> PostingModel:
+        return PostingModel(
+            account=self.account,
+            units=AmountModel(number=self.units.number, currency=self.units.currency),
+            cost=CostModel(
+                number=self.cost.number,
+                currency=self.cost.currency,
+                date=self.cost.date,
+                label=self.cost.label,
+            )
+            if self.cost
+            else None,
+            price=AmountModel(number=self.price.number, currency=self.price.currency)
+            if self.price
+            else None,
+            flag=self.flag,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class AddArgs(LedgerArgs):
+    date: datetime.date = Flag(description="Transaction date (YYYY-MM-DD)")
+    narration: str = Flag(description="Transaction narration")
+    postings: tuple[PostingInput, ...] = Flag(
+        description="One posting as a JSON object; repeat the flag for each posting"
     )
-
-    if _is_table_format():
-        data = [
-            {"Date": str(tx.date), "Payee": tx.payee or "", "Narration": tx.narration} for tx in txs
-        ]
-        typer.output(data, title=f"Transactions ({len(txs)})")
-    else:
-        # Let agentyper format direct Pydantic models to JSON/CSV naturally!
-        results = [tx.model_dump(mode="json") for tx in txs]
-        if fields:
-            fields_set = set(fields.split(","))
-            results = [{k: v for k, v in r.items() if k in fields_set} for r in results]
-        typer.output(results, title=f"Transactions ({len(txs)})")
+    payee: str | None = Flag(default=None, description="Payee name")
+    tags: tuple[str, ...] = Flag(default=(), description="Tag, without '#'; repeat for more")
+    links: tuple[str, ...] = Flag(default=(), description="Link, without '^'; repeat for more")
+    draft: bool = Flag(default=False, description="Mark as pending (!)")
+    target: Path | None = Flag(default=None, description="Write to this file instead")
+    dry_run: bool = Flag(default=False, description="Show the entry, write nothing")
 
 
-@app.command(name="add", mutating=True)
-def tx_add(
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-    date: str = typer.Option(..., "--date", help="Transaction date (YYYY-MM-DD)"),
-    narration: str = typer.Option(..., "--narration", help="Transaction narration"),
-    postings: str = typer.Option(..., "--postings", help="JSON array of posting objects"),
-    payee: str | None = typer.Option(None, "--payee", help="Payee name"),
-    tags: str = typer.Option("[]", "--tags", help="JSON array of tags"),
-    links: str = typer.Option("[]", "--links", help="JSON array of links"),
-    draft: bool = typer.Option(False, "--draft", help="Mark as pending (!)"),
-    print_only: bool = typer.Option(False, "--print", help="Print only, do not write"),
-    dry_run: bool = False,
-    target: Path | None = typer.Option(None, "--target", help="Override target file to write to"),
-):
-    """Add a new transaction."""
+class TransactionWritten(TransactionModel):
+    effect: Literal["created", "would_create"]
+    file: Path | None
+    entry: str
+
+
+def render_written(data: Mapping[str, Any]) -> str:
+    if data.get("file") is None:
+        return text(data, "entry")
+    return f"Transaction added to {text(data, 'file')}.\n"
+
+
+@transaction.command(
+    "add",
+    description="Add a transaction",
+    danger_level="mutating",
+    exit_codes=["NOT_FOUND", "TRANSACTION_INVALID"],
+    supports_raw_payload=True,
+    examples=[
+        (
+            "Record a grocery purchase",
+            "bean transaction add --date 2024-01-15 --narration Groceries"
+            ' --postings \'{"account": "Expenses:Food", "units": {"number": 50, "currency": "USD"}}\''
+            ' --postings \'{"account": "Assets:Cash", "units": {"number": -50, "currency": "USD"}}\'',
+        ),
+    ],
+    renderers={Format.PLAIN: render_written},
+)
+def tx_add(args: AddArgs, ctx: Ctx) -> TransactionWritten:
     model = TransactionModel(
-        date=date,
-        narration=narration,
-        payee=payee,
-        postings=json.loads(postings),
-        tags=set(json.loads(tags)),
-        links=set(json.loads(links)),
+        date=args.date,
+        narration=args.narration,
+        payee=args.payee,
+        postings=[p.to_model() for p in args.postings],
+        tags=set(args.tags),
+        links=set(args.links),
     )
-    service = TransactionService(get_ledger_file(file))
-    entry = service.render_transaction(model, draft=draft)
-    data = {**model.model_dump(mode="json"), "entry": entry}
-    if print_only or dry_run:
-        return emit({**data, "file": None}, effect="would_create", human=escape(entry))
-    written = service.write_transaction(model, entry, target_file=target)
-    return emit(
-        {**data, "file": str(written)},
-        effect="created",
-        human=f"[green]Transaction added to {escape(str(written))}.[/green]",
-    )
+    service = TransactionService(ledger_path(args.file, ctx))
+    try:
+        entry = service.render_transaction(model, draft=args.draft)
+    except ValueError as e:
+        raise Exit.TRANSACTION_INVALID(str(e)) from e
+
+    fields = model.model_dump()
+    if args.dry_run:
+        return TransactionWritten(**fields, effect="would_create", file=None, entry=entry)
+    written = service.write_transaction(model, entry, target_file=args.target)
+    return TransactionWritten(**fields, effect="created", file=written, entry=entry)

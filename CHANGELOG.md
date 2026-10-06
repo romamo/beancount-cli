@@ -7,8 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Built on treaty instead of agentyper** (treaty 1.0.0rc30 or newer). Every command now answers with treaty's envelope (`ok`, `data`, `error`, `warnings`, `meta`), and `bean manifest` describes every command, flag, output schema, and exit code. `exec`, `--schema`, `--fields`, `--dry-run`, and `--idempotency-key` come from treaty.
+- **Flags go after the command**: `bean account list --format json`, not `bean --format json account list`. `--format` takes `plain` (the default at a terminal), `json`, `jsonl`, `ndjson`, `csv`, and `tsv`; `table`, `-o`/`--output`, and `--json` are gone.
+- **Exit codes**: a missing ledger file or account exits `5` (`NOT_FOUND`, was `1`); an existing account or commodity exits `6` (`ALREADY_EXISTS`); ledger errors from `check` exit `80` (`LEDGER_INVALID`, was `2`). New codes `81` to `86` name invalid transactions, BQL queries, commodity input, formatting, currency conversion, and a missing audit currency. AGENTS.md lists them all.
+- **Errors are in the envelope**: a failure is `{"ok": false, "error": {"code", "message", ...}}` on stdout, and `check`'s ledger errors are in `error.context.errors` and `data.errors`.
+- `transaction add --postings` takes one posting as a JSON object and is repeated for each posting, and each posting is validated before anything runs, so a bad account name exits `2` naming `postings[N].account`. `--tags` and `--links` are repeated too, one value each, instead of a JSON array. `exec` lines and `--raw-payload` still carry `postings` as an array. `--print` is gone; use `--dry-run`.
+- `account create --currency` is repeated for each currency (was comma-separated), and `--date` sets the open date in `exec` lines as `date` (was `open_date`). `account pad-balance` takes its assertion date as `date` in `exec` lines (was `balance_date`).
+- List commands (`transaction list`, `account list`, `commodity list`, `commodity check`, `price check`, `price check-anomalies`) return 20 items per page; `--limit 0` returns all, and `--cursor` the next page.
+- Reports have typed output: `balance-sheet` and `trial-balance` return `accounts` (with `units` and `cost` per currency) and `net_positions`; `holdings` returns `accounts`, `totals`, and `currencies`; `audit` returns `postings` with `limited` and `transactions`. The `Units USD`-style keys are gone.
+- `tree` returns the included files as a flat, depth-first list (`path`, `parent`, `depth`) instead of nested objects.
+- `price fetch` returns the same shape on every path (`effect`, `file`, `written`, `redundant`, `jobs`, `prices`, `no_data`, `errors`), its messages are envelope warnings (`PRICES_NO_DATA`, `PRICES_REDUNDANT`, `PRICE_META_MISSING`), and a source error exits `3` with the fetched prices in `data`. Its output is marked as external content. `--format plain` prints only the price directives, so it can be appended to a price file; its status lines go to stderr under `--verbose` (#17).
+- `commodity import` reads `--input-file` or stdin through treaty, and `commodity export` is a mutating command with `--dry-run` that reports `created`, `updated`, or `noop`.
+- `format` reads `bean-format`'s output directly instead of through a temporary file; its unused `--recursive` flag is gone.
+- Shell completion comes from `bean completion bash|zsh` instead of argcomplete.
+- `BEAN_FILE` is read before `BEANCOUNT_FILE`, which keeps working.
+
 ### Fixed
-- `transaction add` (and `transaction.add` lines in `exec`) refuses postings whose weights don't balance, with the same message `bean check` gives (e.g. `Transaction does not balance: (12.50 USD)`), instead of writing a transaction that breaks the ledger. Weights count cost and price, and the tolerance is inferred as beancount does. `--draft` still writes it with a warning (#16)
+- README documented `custom "cli-config"` directives, but the CLI reads `custom "ledger"`. It also listed report aliases, a `transaction schema` command, and a `BEANCOUNT_PATH` lookup that do not exist.
+- `transaction add` (and `transaction.add` lines in `exec`) refuses postings whose weights don't balance with `TRANSACTION_INVALID` (exit `81`), with the same message `bean check` gives (e.g. `Transaction does not balance: (12.50 USD)`), instead of writing a transaction that breaks the ledger. Weights count cost and price, and the tolerance is inferred as beancount does. `--draft` still writes it with a warning (#16)
 
 ## [0.5.0] - 2026-09-30
 

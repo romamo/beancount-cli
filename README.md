@@ -7,21 +7,17 @@ A robust command-line interface and Python library for programmatically managing
 -   **Validation**: Wrap `bean-check` to validate ledgers programmatically.
 -   **Visualization**: View the file inclusion tree (`tree` command).
 -   **Transactions**:
-    -   List transactions with regex filtering (account, payee, tags).
-    -   Add transactions via CLI arguments or JSON (stdin supported).
-    -   Draft mode support (flag `!`).
+    -   List transactions with regex filtering (account, payee, tags) or a BQL `--where` clause.
+    -   Add transactions with typed postings; draft mode support (flag `!`).
 -   **Entities**:
-    -   Manage Accounts (list, create, balance assertion).
-    -   Manage Commodities (list, create, check undeclared).
-    -   Manage Prices (check gaps, fetch/update via bean-price).
--   **Formatting**:
-    -   Auto-format ledgers (`bean-format` wrapper).
-    -   Global output formatting: `--format` support (`table`, `json`, `csv`) for all data commands.
+    -   Manage Accounts (list, create, balance assertion, pad to a balance).
+    -   Manage Commodities (list, create, check undeclared, import, export).
+    -   Manage Prices (check gaps and anomalies, fetch/update via bean-price).
+-   **Formatting**: Auto-format ledgers (`bean-format` wrapper).
 -   **Reporting**: Generate balance, holding, and audit reports with multi-currency conversion.
--   **Composability**: Built for Unix piping (`json` | `csv`) and batch processing via STDIN.
+-   **Agent-ready**: Built on [treaty](https://github.com/romamo/treaty): every command answers with a JSON envelope when piped, declares its exit codes, and is listed in `bean manifest`.
 -   **JSONL Stream Execution**: `bean exec` dispatches a mixed-command JSONL stream to the ledger; `--dry-run` previews the result without writing.
 -   **Configuration**: Custom Beancount directives for routing new entries to specific files.
--   **Tab Completion**: We provide tab completions for bash and zsh.
 
 ## Installation
 
@@ -39,22 +35,30 @@ For development:
 uv sync
 ```
 
-For setting up tab completion for your shell, see [Tab Completion](#tab-completion) under [Configuration](#configuration).
+## Usage
 
-### Global Formatting Flag
+### Output Formats
 
-All data-retrieval and reporting commands support the `--format` flag.
+At a terminal, commands print text tables (`plain`). When stdout is piped, or with `--format json`, they print a JSON envelope: `{"ok", "data", "error", "warnings", "meta"}`.
 
 ```bash
-# Default human-readable table
-bean report bs
+# Human-readable table
+bean report balance-sheet
 
-# Machine-readable CSV (highly token-efficient for AI agents)
-bean --format csv transaction list
+# Structural JSON (for jq or other scripts)
+bean account list --format json
 
-# Structural JSON (perfect for piping into jq or other scripts)
-bean --format json account list
+# CSV, or tab-separated values
+bean transaction list --format csv
+bean transaction list --format tsv
+
+# Only some fields
+bean transaction list --fields date,payee,narration
 ```
+
+Flags go after the command: `bean account list --format json`, not `bean --format json account list`.
+
+List commands (`transaction list`, `account list`, `commodity list`, `price check`) return 20 items at a time. `--limit 0` returns all of them, and `--cursor` with `meta.pagination.next_cursor` the next page.
 
 ### Check Ledger
 
@@ -70,6 +74,7 @@ Format your ledger file in-place (uses `bean-format`):
 
 ```bash
 bean format main.beancount
+bean format main.beancount --dry-run   # report whether it would change
 ```
 
 ### View Inclusion Tree
@@ -86,20 +91,17 @@ Generate specialized accounting reports with multi-currency support:
 
 ```bash
 # Balance Sheet (Assets, Liabilities, Equity)
-bean report balance-sheet main.beancount
+bean report balance-sheet -f main.beancount
 
 # Trial Balance (All accounts including Income/Expenses)
-bean report trial-balance main.beancount
+bean report trial-balance -f main.beancount
 
 # Holdings (Net worth per Asset account)
-bean report holdings main.beancount
+bean report holdings -f main.beancount
 
 # Audit a specific currency (Source of Exposure)
-bean report audit --currency USD main.beancount
+bean report audit -f main.beancount --currency USD
 ```
-
-> [!TIP]
-> Convenience aliases are supported: `bs` (balance-sheet) and `trial` (trial-balance).
 
 #### Unified Currency Reporting
 
@@ -107,78 +109,80 @@ Use the `--convert` and `--valuation` flags for a consolidated view:
 
 ```bash
 # View Trial Balance in USD using historical cost
-bean report trial main.beancount --convert USD --valuation cost
+bean report trial-balance --convert USD --valuation cost
 
 # View Balance Sheet in EUR using current market prices
-bean report bs main.beancount --convert EUR --valuation market
+bean report balance-sheet --convert EUR --valuation market
 ```
 
 | Valuation | Description | Use Case |
 | :--- | :--- | :--- |
-| `market` (default) | Uses latest prices from the ledger. | Current **Net Worth** tracking. |
-| `cost` | Uses historical price basis (`{}`). | **Accounting Verification** (proving balance). |
+| `market` (default) | Uses latest prices from the ledger | Current **Net Worth** tracking |
+| `cost` | Uses historical price basis (`{}`) | **Accounting Verification** (proving balance) |
+
+### Transactions
 
 **List Transactions:**
 ```bash
-bean transaction list main.beancount --account "Assets:US:.*" --payee "Amazon"
+bean transaction list --account "Assets:US:.*" --payee "Amazon"
+bean transaction list --where "account ~ 'Expenses'"
 ```
 
-**Add Transaction:**
+**Add Transaction:** each `--postings` takes one posting as a JSON object; repeat it for every posting.
 ```bash
-# JSON via argument
-bean transaction add main.beancount --json '{"date": "2023-10-27", ...}'
+bean transaction add --date 2023-10-27 --payee Amazon --narration "Office supplies" \
+  --postings '{"account": "Expenses:Office:Supplies", "units": {"number": 45.99, "currency": "USD"}}' \
+  --postings '{"account": "Liabilities:US:Chase:Slate", "units": {"number": -45.99, "currency": "USD"}}'
 
-# JSON via stdin (Recommended for complex data)
-cat tx.json | bean transaction add main.beancount --json -
+# Create as Draft (!), tagged
+bean transaction add ... --draft --tags office
 
-# Create as Draft (!)
-bean transaction add main.beancount --json ... --draft
+# Preview the entry without writing it
+bean transaction add ... --dry-run
+```
+
+The whole transaction can also travel as one JSON object, with `postings` as an array:
+
+```bash
+bean transaction add --raw-payload "$(cat tx.json)"
 ```
 
 ### JSONL Stream Execution
 
 Use `bean exec` to dispatch a mixed-command JSONL stream (one JSON object per line) to the ledger in a single pass.
 
-Each line must contain a `_cmd` field mapping to any CLI command (`transaction.add`, `account.create`, `commodity.create`, etc.). Use `_opts` to pass CLI flags that cannot go through the payload.
+Each line must contain a `_cmd` field naming a command by its dotted path (`transaction.add`, `account.create`, `commodity.create`, etc.); the other keys are its arguments, named as the flags are, with `_` for `-`. Each line answers with its own JSON envelope.
 
 ```bash
 # Write a mixed stream to the ledger
-cat commands.jsonl | uv run bean exec
+cat commands.jsonl | bean exec
 
 # Preview without writing
-cat commands.jsonl | uv run bean exec --dry-run
-
-# Continue after errors, collect all failures
-cat commands.jsonl | uv run bean exec --ignore-errors 2>errors.log
+cat commands.jsonl | bean exec --dry-run
 ```
 
 Example JSONL line:
 ```json
-{"_cmd": "transaction.add", "_opts": {"draft": true}, "date": "2024-01-01", "narration": "Buy coffee", "postings": [{"account": "Expenses:Food", "units": {"number": 5, "currency": "USD"}}, {"account": "Assets:Cash", "units": {"number": -5, "currency": "USD"}}]}
+{"_cmd": "transaction.add", "draft": true, "date": "2024-01-01", "narration": "Buy coffee", "postings": [{"account": "Expenses:Food", "units": {"number": 5, "currency": "USD"}}, {"account": "Assets:Cash", "units": {"number": -5, "currency": "USD"}}]}
 ```
 
 ### Manage Accounts & Commodities
 
-All creation commands (`transaction add`, `account create`, `commodity create`) support batch processing via JSON arrays on STDIN. Use `--target` to override the destination file.
-
-```bash
-# Batch add transactions from a file
-cat txs.json | bean transaction add --json -
-
-# Pipe accounts from one ledger to another
-bean --format json account list --file old.beancount | bean account create --json -
-```
+The creation commands (`transaction add`, `account create`, `commodity create`) take `--target` to override the destination file and `--dry-run` to preview the entry.
 
 **Accounts:**
 ```bash
 # List accounts
 bean account list
 
-# Create account
-bean account create --name "Assets:NewBank" --currency "USD"
+# Create account; repeat --currency for more
+bean account create --name "Assets:NewBank" --currency USD
 
 # Add a balance assertion
-bean account balance --json '{"date": "2024-01-01", "account": "Assets:Bank", "amount": {"number": 1000, "currency": "USD"}}'
+bean account balance --account Assets:Bank --date 2024-01-01 --amount 1000 --currency USD
+
+# Bring an account to a balance; the difference is booked to Expenses:Other
+bean account pad-balance --account Assets:Bank --amount 1777 --currency EUR
 ```
 
 **Commodities:**
@@ -193,7 +197,11 @@ bean commodity list --asset-class stock
 bean commodity check
 
 # Create a commodity
-bean commodity create "BTC" --name "Bitcoin"
+bean commodity create BTC --name "Bitcoin"
+
+# Import directives from stdin or a file into the commodities_file
+cat registry.beancount | bean commodity import
+bean commodity import --input-file registry.beancount
 ```
 
 **Prices:**
@@ -204,7 +212,7 @@ bean price check
 # Check with weekly rate and 14-day tolerance
 bean price check --rate weekly --tolerance 14
 
-# Fetch latest quotes (dry run)
+# List the fetch jobs without fetching
 bean price fetch --dry-run
 
 # Fetch and write new prices to the ledger
@@ -215,51 +223,24 @@ bean price fetch --update
 
 ### Agent Documentation
 We provide specialized documentation for different types of AI interactions:
-- [**AGENTS.md**](./AGENTS.md): Guide for **AI End Agents** operating the CLI (prompting strategies, token optimization, batch workflows).
+- [**AGENTS.md**](./AGENTS.md): Guide for **AI End Agents** operating the CLI (exit codes, batch workflows, schemas).
 - [**CODING_AGENTS.md**](./CODING_AGENTS.md): Mandatory rules for **AI Coding Agents** modifying the source code (Value Objects, Fail-Fast rules, type safety).
 
-
-### Transaction Schema
-Agents can dynamically retrieve the JSON schema for transactions to ensure valid data generation:
+### Schemas
+Agents can retrieve the arguments and output schema of any command, or of all of them at once:
 
 ```bash
-bean transaction schema
-```
-
-### Complex Transaction Example
-Agents should aim to generate JSON in this format for a standard purchase with multiple postings:
-
-```json
-{
-  "date": "2023-10-27",
-  "payee": "Amazon",
-  "narration": "Office supplies",
-  "postings": [
-    {
-      "account": "Expenses:Office:Supplies",
-      "units": { "number": 45.99, "currency": "USD" }
-    },
-    {
-      "account": "Liabilities:US:Chase:Slate",
-      "units": { "number": -45.99, "currency": "USD" }
-    }
-  ]
-}
-```
-
-### Scripting with `uv run`
-For reliable cross-platform execution in agent workflows:
-```bash
-uv run bean transaction add --json - < tx.json
+bean transaction add --schema
+bean manifest
 ```
 
 ## Configuration
 
 ### Ledger Discovery
-`bean` uses a 4-tier discovery logic to find your ledger file automatically:
-1.  **Explicit Argument**: Passing the filename directly (e.g. `bean check my.beancount`).
-2.  **`BEANCOUNT_FILE`**: Direct path to a ledger file.
-3.  **`BEANCOUNT_PATH`**: Looks for `main.beancount` inside this directory.
+`bean` finds your ledger file in this order:
+1.  **Explicit Argument**: The positional file of `check`, `tree`, `format`, and `price fetch` (e.g. `bean check my.beancount`).
+2.  **`--file` / `-f`**: Accepted by every command.
+3.  **`BEAN_FILE`**, then **`BEANCOUNT_FILE`**: Path to a ledger file.
 4.  **Local Directory**: Fallback to `./main.beancount`.
 
 ### Custom Directives
@@ -268,16 +249,17 @@ You can configure where new entries are written using custom directives in your 
 **Note:** `custom` directives require a date (e.g. `2023-01-01`).
 
 ```beancount
-2023-01-01 custom "cli-config" "new_transaction_file" "inbox.beancount"
-2023-01-01 custom "cli-config" "new_account_file" "accounts.beancount"
-2023-01-01 custom "cli-config" "new_commodity_file" "commodities.beancount"
+2023-01-01 custom "ledger" "new_transaction_file" "inbox.beancount"
+2023-01-01 custom "ledger" "new_account_file" "accounts.beancount"
+2023-01-01 custom "ledger" "new_commodity_file" "commodities.beancount"
+2023-01-01 custom "ledger" "commodities_file" "commodities.beancount"
 ```
 
 **Context-Aware Insertion:**
 You can use placeholders to route transactions to dynamic paths:
 
 ```beancount
-2023-01-01 custom "cli-config" "new_transaction_file" "{year}/{month}/txs.beancount"
+2023-01-01 custom "ledger" "new_transaction_file" "{year}/{month}/txs.beancount"
 ```
 Supported placeholders: `{year}`, `{month}`, `{day}`, `{payee}`, `{slug}`.
 
@@ -285,34 +267,20 @@ Supported placeholders: `{year}`, `{month}`, `{day}`, `{payee}`, `{slug}`.
 If `new_transaction_file` points to a **directory**, `bean` will create a new file for each transaction inside that directory, named with an ISO timestamp.
 
 ```beancount
-2023-01-01 custom "cli-config" "new_transaction_file" "inbox/"
+2023-01-01 custom "ledger" "new_transaction_file" "inbox/"
 ```
 
 ### Tab Completion
 
-`bean` supports shell tab completion through `argcomplete`.
-
-For the current Bash session:
+`bean completion` writes the completion script for your shell:
 
 ```bash
-eval "$(register-python-argcomplete bean)"
+# Bash
+source <(bean completion bash --format plain)
+
+# Zsh
+source <(bean completion zsh --format plain)
 ```
-
-For the current Zsh session:
-
-```bash
-autoload -U +X bashcompinit && bashcompinit
-eval "$(register-python-argcomplete bean)"
-```
-
-To enable globally for future sessions:
-
-```bash
-activate-global-python-argcomplete --user
-```
-
-If completion does not work, confirm your shell has loaded the generated completion
-script and that `register-python-argcomplete` is available in your environment.
 
 ## Development
 

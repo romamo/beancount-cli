@@ -1,141 +1,163 @@
-import json
-import shutil
-import subprocess  # nosec B404
-import sys
-import tempfile
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Literal
 
-import agentyper as typer
-from rich.markup import escape
-from rich.tree import Tree
+from treaty import Arg, Ctx, Exit, Flag, Format, Out
 
-from beancount_cli.commands.common import _is_table_format, console, emit, get_ledger_file
+from beancount_cli.app import LedgerArgs, app, ledger_path
+from beancount_cli.formatting import Tree
 from beancount_cli.services import LedgerService, MapService
 
 
-def check(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-):
-    """Validate the ledger file."""
-    actual_file = get_ledger_file(ledger_file or file)
-    format_ = "table" if _is_table_format() else "json"
+@dataclass(frozen=True, slots=True)
+class FileArgs(LedgerArgs):
+    ledger_file: Path | None = Arg(default=None, description="Ledger file; overrides --file")
 
-    try:
-        service = LedgerService(actual_file)
-        service.load()
-    except FileNotFoundError as exc:
-        typer.exit_error(
-            str(exc), code=typer.EXIT_SYSTEM, error_type="FileNotFoundError", format_=format_
+
+@dataclass(frozen=True, slots=True)
+class LedgerError:
+    location: str | None
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class CheckResult:
+    file: Path
+    valid: bool
+    errors: list[LedgerError] = Out(default_factory=list, ordered=True)
+
+
+def render_check(data: Mapping[str, Any]) -> str:
+    return "No errors found.\n"
+
+
+@app.command(
+    "check",
+    description="Validate the ledger file",
+    danger_level="safe",
+    exit_codes=["NOT_FOUND", "LEDGER_INVALID"],
+    examples=[
+        ("Validate the ledger", "bean check main.beancount"),
+        ("Validate the ledger BEANCOUNT_FILE names", "bean check"),
+    ],
+    renderers={Format.PLAIN: render_check},
+)
+def check(args: FileArgs, ctx: Ctx) -> CheckResult:
+    actual_file = ledger_path(args.ledger_file or args.file, ctx)
+    service = LedgerService(actual_file)
+    service.load()
+
+    errors = [
+        LedgerError(
+            location=f"{e.source['filename']}:{e.source['lineno']}" if e.source else None,
+            message=e.message,
         )
-    except OSError as exc:
-        typer.exit_error(str(exc), code=typer.EXIT_SYSTEM, error_type="OSError", format_=format_)
-
-    if not service.errors:
-        if format_ == "table":
-            console.print("[green]No errors found.[/green]")
-            return None
-        return {"file": str(actual_file), "valid": True, "errors": []}
-
-    if format_ == "json":
-        payload = {
-            "error": True,
-            "error_type": "BeancountValidationError",
-            "exit_code": typer.EXIT_VALIDATION,
-            "errors": [
-                {
-                    "location": f"{e.source['filename']}:{e.source['lineno']}"
-                    if e.source
-                    else None,
-                    "message": e.message,
-                }
-                for e in service.errors
-            ],
-        }
-        print(json.dumps(payload), file=sys.stderr)
-    else:
-        for error in service.errors:
-            source = error.source
-            loc = f"{source['filename']}:{source['lineno']}" if source else "?"
-            console.print(f"[red]{loc}: {error.message}[/red]")
-    raise SystemExit(typer.EXIT_VALIDATION)
-
-
-def tree(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-):
-    """Visualize the tree of included files."""
-    actual_file = get_ledger_file(ledger_file or file)
-    service = MapService(actual_file)
-    tree_dict = service.get_include_tree()
-
-    def build_tree(data: dict, tree_node: Tree):
-        for path, children in data.items():
-            node = tree_node.add(f"[yellow]{path}[/yellow]")
-            build_tree(children, node)
-
-    root = Tree(f"[bold blue]{actual_file}[/bold blue]")
-    build_tree(tree_dict, root)
-    if _is_table_format():
-        console.print(root)
-    else:
-        typer.output({str(actual_file): tree_dict}, title="File Tree")
-
-
-def format_cmd(
-    ledger_file: Path | None = typer.Argument(None, help="Path to ledger file"),
-    file: Path | None = typer.Option(
-        None, "--file", "-f", envvar="BEANCOUNT_FILE", help="Main beancount file"
-    ),
-    recursive: bool = typer.Option(False, "--recursive", "-r", help="Format all included files"),
-    dry_run: bool = False,
-):
-    """Format ledger file(s)."""
-    actual_file = get_ledger_file(ledger_file or file)
-    if not actual_file.is_file():
-        typer.exit_error(
-            f"Ledger file not found: {actual_file}",
-            code=typer.EXIT_SYSTEM,
-            error_type="FileNotFoundError",
-            field="file",
+        for e in service.errors
+    ]
+    if errors:
+        raise Exit.LEDGER_INVALID(
+            f"{len(errors)} errors in {actual_file}",
+            context={
+                "file": str(actual_file),
+                "errors": [{"location": e.location, "message": e.message} for e in errors],
+            },
+            data=CheckResult(file=actual_file, valid=False, errors=errors),
         )
-    if shutil.which("bean-format") is None:
-        typer.exit_error(
-            "bean-format is not on PATH",
-            code=typer.EXIT_SYSTEM,
-            error_type="DependencyMissing",
-            hint="Install beancount, which provides bean-format, into the active environment",
+    return CheckResult(file=actual_file, valid=True)
+
+
+@dataclass(frozen=True, slots=True)
+class IncludedFile:
+    path: str
+    parent: str
+    depth: int
+
+
+@dataclass(frozen=True, slots=True)
+class IncludeTree:
+    file: Path
+    includes: list[IncludedFile] = Out(default_factory=list, ordered=True)
+
+
+def _flatten(tree: dict[str, Any], parent: str, depth: int) -> list[IncludedFile]:
+    files = []
+    for path, children in tree.items():
+        files.append(IncludedFile(path=path, parent=parent, depth=depth))
+        files.extend(_flatten(children, path, depth + 1))
+    return files
+
+
+def render_tree(data: Mapping[str, Any]) -> str:
+    root = Tree(str(data.get("file", "")))
+    nodes = {root.label: root}
+    for included in data.get("includes", []):
+        nodes[included["path"]] = nodes[included["parent"]].add(included["path"])
+    return f"{root}\n"
+
+
+@app.command(
+    "tree",
+    description="Show the tree of included files, depth first",
+    danger_level="safe",
+    exit_codes=["NOT_FOUND"],
+    examples=[("Show what main.beancount includes", "bean tree main.beancount")],
+    renderers={Format.PLAIN: render_tree},
+)
+def tree(args: FileArgs, ctx: Ctx) -> IncludeTree:
+    actual_file = ledger_path(args.ledger_file or args.file, ctx)
+    include_tree = MapService(actual_file).get_include_tree()
+    return IncludeTree(file=actual_file, includes=_flatten(include_tree, str(actual_file), 0))
+
+
+@dataclass(frozen=True, slots=True)
+class FormatArgs(FileArgs):
+    dry_run: bool = Flag(default=False, description="Report whether the file would change")
+
+
+@dataclass(frozen=True, slots=True)
+class Formatted:
+    effect: Literal["updated", "noop", "would_update"]
+    file: Path
+    changed: bool
+
+
+def render_format(data: Mapping[str, Any]) -> str:
+    file = data.get("file", "")
+    match data.get("effect"):
+        case "noop":
+            return f"{file} is already formatted.\n"
+        case "would_update":
+            return f"Would format {file}.\n"
+        case _:
+            return f"Formatted {file}\n"
+
+
+@app.command(
+    "format",
+    description="Format the ledger file with bean-format",
+    danger_level="mutating",
+    exit_codes=["NOT_FOUND", "FORMAT_FAILED"],
+    external=False,
+    examples=[
+        ("Format the ledger in place", "bean format main.beancount"),
+        ("Check whether it needs formatting", "bean format main.beancount --dry-run"),
+    ],
+    renderers={Format.PLAIN: render_format},
+)
+def format_cmd(args: FormatArgs, ctx: Ctx) -> Formatted:
+    actual_file = ledger_path(args.ledger_file or args.file, ctx)
+    done = ctx.run(["bean-format", "-c", "50", str(actual_file)], check=False)
+    if done.returncode != 0:
+        raise Exit.FORMAT_FAILED(
+            f"bean-format failed: {done.stderr.strip()}",
+            context={"file": str(actual_file), "returncode": done.returncode},
         )
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".beancount", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-    try:
-        cmd = ["bean-format", "-c", "50", "-o", str(tmp_path), str(actual_file)]
-        try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)  # nosec B603
-        except subprocess.CalledProcessError as e:
-            typer.exit_error(
-                f"bean-format failed: {e.stderr.strip()}",
-                code=typer.EXIT_SYSTEM,
-                error_type="FormatError",
-            )
-        formatted = tmp_path.read_text()
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-    changed = formatted != actual_file.read_text()
-    if changed and not dry_run:
-        actual_file.write_text(formatted)
-
+    changed = done.stdout != actual_file.read_text()
     if not changed:
-        effect, human = "noop", f"[green]{escape(str(actual_file))} is already formatted.[/green]"
-    elif dry_run:
-        effect, human = "would_update", f"[yellow]Would format {escape(str(actual_file))}.[/yellow]"
-    else:
-        effect, human = "updated", f"[green]Formatted {escape(str(actual_file))}[/green]"
-    return emit({"file": str(actual_file), "changed": changed}, effect=effect, human=human)
+        return Formatted(effect="noop", file=actual_file, changed=False)
+    if args.dry_run:
+        return Formatted(effect="would_update", file=actual_file, changed=True)
+    actual_file.write_text(done.stdout)
+    return Formatted(effect="updated", file=actual_file, changed=True)

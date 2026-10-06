@@ -93,7 +93,7 @@ class TransactionModel(BaseModel):
     narration: str
     tags: set[str] = Field(default_factory=set)
     links: set[str] = Field(default_factory=set)
-    postings: list[PostingModel]
+    postings: list[PostingModel] = Field(json_schema_extra={"x-ordered": True})
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
