@@ -107,10 +107,10 @@ def account_create(args: CreateArgs, ctx: Ctx) -> AccountWritten:
         )
     )
     fields = model.model_dump()
+    target = target_path(args.target)
     if args.dry_run:
         return AccountWritten(**fields, effect="would_create", file=None, entry=entry)
     service = AccountService(ledger_path(args.file, ctx))
-    target = target_path(args.target)
     if str(args.name) in service.ledger_service.get_accounts():
         raise already_exists({"name": str(args.name)}, conflict_id=str(args.name))
     written = service.create_account(model, target_file=target)
@@ -166,11 +166,11 @@ def account_balance(args: BalanceArgs, ctx: Ctx) -> BalanceWritten:
     )
     entry = printer.format_entry(to_core_balance(model))
     fields = model.model_dump()
+    target = target_path(args.target)
     if args.dry_run:
         return BalanceWritten(**fields, effect="would_create", file=None, entry=entry)
     service = AccountService(ledger_path(args.file, ctx))
     _require_open(service, args.account)
-    target = target_path(args.target)
     written = service.add_balance(model, target_file=target)
     return BalanceWritten(**fields, effect="created", file=written, entry=entry)
 
@@ -231,10 +231,10 @@ def account_pad_balance(args: PadBalanceArgs, ctx: Ctx) -> PadBalanceWritten:
     core_pad, core_balance = to_core_pad(model)
     entry = printer.format_entry(core_pad) + "\n" + printer.format_entry(core_balance)
     fields = model.model_dump()
+    target = target_path(args.target)
     if args.dry_run:
         return PadBalanceWritten(**fields, effect="would_create", file=None, entry=entry)
     service = AccountService(ledger_path(args.file, ctx))
     _require_open(service, args.account)
-    target = target_path(args.target)
     written = service.add_pad_balance(model, target_file=target)
     return PadBalanceWritten(**fields, effect="created", file=written, entry=entry)

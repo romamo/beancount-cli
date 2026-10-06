@@ -168,7 +168,8 @@ def tx_add(args: AddArgs, ctx: Ctx) -> TransactionWritten:
         raise Exit.TRANSACTION_INVALID(str(e)) from e
 
     fields = model.model_dump()
+    target = target_path(args.target)
     if args.dry_run:
         return TransactionWritten(**fields, effect="would_create", file=None, entry=entry)
-    written = service.write_transaction(model, entry, target_file=target_path(args.target))
+    written = service.write_transaction(model, entry, target_file=target)
     return TransactionWritten(**fields, effect="created", file=written, entry=entry)

@@ -56,6 +56,27 @@ def test_target_in_missing_directory_is_not_found(command: str, ledger: Path, tm
 
 
 @pytest.mark.parametrize("command", sorted(COMMANDS))
+def test_dry_run_with_target_in_missing_directory_is_not_found(
+    command: str, ledger: Path, tmp_path: Path
+):
+    missing = tmp_path / "nodir"
+    before = ledger.read_bytes()
+    env = call(
+        command,
+        file=str(ledger),
+        target=str(missing / "x.beancount"),
+        dry_run=True,
+        **COMMANDS[command],
+    )
+    assert env.exit_code == 5, env.error
+    assert env.error is not None
+    assert env.error.code == "NOT_FOUND"
+    assert env.error.context["file"] == str(missing)
+    assert ledger.read_bytes() == before
+    assert not missing.exists()
+
+
+@pytest.mark.parametrize("command", sorted(COMMANDS))
 def test_target_naming_a_directory_is_an_argument_error(command: str, ledger: Path, tmp_path: Path):
     directory = tmp_path / "adir"
     directory.mkdir()
@@ -78,7 +99,8 @@ def test_target_in_existing_directory_is_written(ledger: Path, tmp_path: Path):
     assert env.data["entry"] in target.read_text()
 
 
-def test_exec_line_with_missing_target_directory(ledger: Path, tmp_path: Path):
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_exec_line_with_missing_target_directory(ledger: Path, tmp_path: Path, dry_run: bool):
     missing = tmp_path / "nodir"
     before = ledger.read_bytes()
     lines = [
@@ -86,7 +108,8 @@ def test_exec_line_with_missing_target_directory(ledger: Path, tmp_path: Path):
         for command, args in sorted(COMMANDS.items())
     ]
     stdin = "".join(json.dumps(line) + "\n" for line in lines)
-    _, out, err = run("exec", "--ignore-errors", stdin=stdin)
+    flags = ["--dry-run"] if dry_run else []
+    _, out, err = run("exec", "--ignore-errors", *flags, stdin=stdin)
     results = [json.loads(line) for line in out.splitlines()]
     assert len(results) == len(lines), err
     for result in results:
