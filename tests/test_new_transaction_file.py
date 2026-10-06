@@ -138,3 +138,25 @@ def test_known_placeholders_still_write(tmp_path):
     written = tmp_path / "inbox" / "2024-01-15_Store.beancount"
     assert envelope["data"]["file"] == str(written.resolve())
     assert "Groceries" in written.read_text()
+
+
+@pytest.mark.parametrize(
+    ("pattern", "placeholder"),
+    [
+        ("inbox/{year:{}}.beancount", ""),
+        ("inbox/{year:{0}}.beancount", "0"),
+        ("inbox/{year:{year[0]}}.beancount", "year[0]"),
+        ("inbox/{year:{year.real}}.beancount", "year.real"),
+    ],
+)
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_placeholder_nested_in_format_spec_is_refused(tmp_path, pattern, placeholder, dry_run):
+    ledger = _ledger(tmp_path, pattern)
+
+    code, envelope, err = _add(ledger, *(["--dry-run"] if dry_run else []))
+
+    assert code == 80
+    assert envelope["error"]["code"] == "LEDGER_INVALID"
+    assert envelope["error"]["context"]["placeholder"] == placeholder
+    assert err == ""
+    assert _files(tmp_path) == [ledger]

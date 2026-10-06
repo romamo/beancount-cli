@@ -375,13 +375,21 @@ def _slug(tx: TransactionModel) -> str:
     return _path_safe(tx.payee or tx.narration or "tx")
 
 
+def _format_fields(pattern: str) -> list[str]:
+    """Every field name in a format pattern, including those nested in a format spec."""
+    fields = []
+    for _, field, spec, _ in string.Formatter().parse(pattern):
+        if field is not None:
+            fields.append(field)
+            fields.extend(_format_fields(spec or ""))
+    return fields
+
+
 def _format_option(option: str, pattern: str, placeholders: dict[str, object]) -> str:
     """Format a ledger option's pattern, refusing anything but the known named placeholders."""
     known = tuple(placeholders)
     try:
-        fields = [
-            field for _, field, _, _ in string.Formatter().parse(pattern) if field is not None
-        ]
+        fields = _format_fields(pattern)
     except ValueError as e:
         raise InvalidLedgerOptionError(
             option, pattern, f"malformed pattern ({e})", known=known
@@ -396,12 +404,6 @@ def _format_option(option: str, pattern: str, placeholders: dict[str, object]) -
             raise InvalidLedgerOptionError(option, pattern, reason, placeholder=field, known=known)
     try:
         return pattern.format(**placeholders)
-    except KeyError as e:
-        # A placeholder nested in a format spec, such as {year:{width}}
-        field = str(e.args[0])
-        raise InvalidLedgerOptionError(
-            option, pattern, f"unknown placeholder {{{field}}}", placeholder=field, known=known
-        ) from e
     except ValueError as e:
         raise InvalidLedgerOptionError(
             option, pattern, f"malformed pattern ({e})", known=known
