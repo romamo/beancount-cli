@@ -10,7 +10,15 @@ from beancount.parser import printer
 from treaty import Ctx, Exit, Flag, Format, already_exists
 
 from beancount_cli.adapters import to_core_balance, to_core_pad
-from beancount_cli.app import LedgerArgs, app, ledger_path, render_rows, text
+from beancount_cli.app import (
+    LedgerArgs,
+    app,
+    ledger_path,
+    refuse_directory_target,
+    render_rows,
+    target_path,
+    text,
+)
 from beancount_cli.models import (
     AccountModel,
     AccountName,
@@ -68,6 +76,9 @@ class CreateArgs(LedgerArgs):
     target: Path | None = Flag(default=None, description="Write to this file instead")
     dry_run: bool = Flag(default=False, description="Show the entry, write nothing")
 
+    def __post_init__(self) -> None:
+        refuse_directory_target(self.target)
+
 
 class AccountWritten(AccountModel):
     effect: Literal["created", "would_create"]
@@ -99,9 +110,10 @@ def account_create(args: CreateArgs, ctx: Ctx) -> AccountWritten:
     if args.dry_run:
         return AccountWritten(**fields, effect="would_create", file=None, entry=entry)
     service = AccountService(ledger_path(args.file, ctx))
+    target = target_path(args.target)
     if str(args.name) in service.ledger_service.get_accounts():
         raise already_exists({"name": str(args.name)}, conflict_id=str(args.name))
-    written = service.create_account(model, target_file=args.target)
+    written = service.create_account(model, target_file=target)
     return AccountWritten(**fields, effect="created", file=written, entry=entry)
 
 
@@ -113,6 +125,9 @@ class BalanceArgs(LedgerArgs):
     currency: CurrencyCode = Flag(short="c", description="Currency code (e.g. USD)")
     target: Path | None = Flag(default=None, description="Write to this file instead")
     dry_run: bool = Flag(default=False, description="Show the entry, write nothing")
+
+    def __post_init__(self) -> None:
+        refuse_directory_target(self.target)
 
 
 class BalanceWritten(BalanceModel):
@@ -155,7 +170,8 @@ def account_balance(args: BalanceArgs, ctx: Ctx) -> BalanceWritten:
         return BalanceWritten(**fields, effect="would_create", file=None, entry=entry)
     service = AccountService(ledger_path(args.file, ctx))
     _require_open(service, args.account)
-    written = service.add_balance(model, target_file=args.target)
+    target = target_path(args.target)
+    written = service.add_balance(model, target_file=target)
     return BalanceWritten(**fields, effect="created", file=written, entry=entry)
 
 
@@ -177,6 +193,9 @@ class PadBalanceArgs(LedgerArgs):
     )
     target: Path | None = Flag(default=None, description="Write to this file instead")
     dry_run: bool = Flag(default=False, description="Show the entries, write nothing")
+
+    def __post_init__(self) -> None:
+        refuse_directory_target(self.target)
 
 
 class PadBalanceWritten(PadBalanceModel):
@@ -216,5 +235,6 @@ def account_pad_balance(args: PadBalanceArgs, ctx: Ctx) -> PadBalanceWritten:
         return PadBalanceWritten(**fields, effect="would_create", file=None, entry=entry)
     service = AccountService(ledger_path(args.file, ctx))
     _require_open(service, args.account)
-    written = service.add_pad_balance(model, target_file=args.target)
+    target = target_path(args.target)
+    written = service.add_pad_balance(model, target_file=target)
     return PadBalanceWritten(**fields, effect="created", file=written, entry=entry)
