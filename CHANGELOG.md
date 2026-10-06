@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BEAN_FILE` is read before `BEANCOUNT_FILE`, which keeps working.
 
 ### Fixed
+- `transaction list --where` with a BQL column or function beanquery does not know exits `82` (`QUERY_INVALID`) instead of crashing, and an invalid `--payee` or `--account` regex exits `2` (`ARG_ERROR`) naming the flag.
 - README documented `custom "cli-config"` directives, but the CLI reads `custom "ledger"`. It also listed report aliases, a `transaction schema` command, and a `BEANCOUNT_PATH` lookup that do not exist.
 - `transaction add` (and `transaction.add` lines in `exec`) refuses postings whose weights don't balance with `TRANSACTION_INVALID` (exit `81`), with the same message `bean check` gives (e.g. `Transaction does not balance: (12.50 USD)`), instead of writing a transaction that breaks the ledger. Weights count cost and price, and the tolerance is inferred as beancount does. `--draft` still writes it with a warning (#16)
 

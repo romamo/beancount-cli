@@ -14,8 +14,10 @@ from beancount_cli.formatting import Table
 from beancount_cli.models import (
     AccountName,
     CurrencyCode,
+    RegexPattern,
     validate_account_name,
     validate_currency_code,
+    validate_regex,
 )
 
 app = App("bean", version=__version__, description="Beancount CLI tool for managing ledgers.")
@@ -39,6 +41,7 @@ app.scalar(
 )
 app.scalar(AccountName, parse=lambda value: AccountName(validate_account_name(value)))
 app.scalar(CurrencyCode, parse=lambda value: CurrencyCode(validate_currency_code(value)))
+app.scalar(RegexPattern, parse=lambda value: RegexPattern(validate_regex(value)))
 
 app.exit_code(
     "LEDGER_INVALID",

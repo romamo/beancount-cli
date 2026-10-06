@@ -70,6 +70,20 @@ def test_transaction_list_bad_query(temp_beancount_file):
     assert env.error.code == "QUERY_INVALID"
 
 
+def test_transaction_list_unknown_bql_column_is_query_invalid(temp_beancount_file):
+    # beanquery raises CompilationError (not a ValueError) for a column it does not know
+    env = call("transaction.list", file=str(temp_beancount_file), where="foo = 1")
+    assert env.exit_code == 82
+    assert env.error.code == "QUERY_INVALID"
+
+
+def test_transaction_list_bad_regex_is_arg_error(temp_beancount_file):
+    for flag in ("payee", "account"):
+        env = call("transaction.list", file=str(temp_beancount_file), **{flag: "("})
+        assert env.exit_code == 2
+        assert env.error.errors[0]["field"] == flag
+
+
 def test_transaction_add(temp_beancount_file):
     env = call(
         "transaction.add",

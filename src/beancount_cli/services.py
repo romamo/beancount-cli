@@ -225,7 +225,6 @@ class TransactionService:
             try:
                 import beanquery  # type: ignore
                 from beancount.core.compare import hash_entry
-                from beanquery.parser import ParseError  # type: ignore
                 from beanquery.sources import beancount  # type: ignore
 
                 conn = beanquery.Connection()
@@ -244,7 +243,7 @@ class TransactionService:
 
                 # Apply BQL IDs to current filtered list
                 filtered_txs = [tx for tx in filtered_txs if hash_entry(tx) in ids]
-            except (ImportError, SyntaxError, ValueError, ParseError) as e:
+            except (ImportError, SyntaxError, ValueError, beanquery.Error) as e:
                 raise ValueError(f"BQL query failed: {e}") from e
 
         return [from_core_transaction(tx) for tx in filtered_txs]

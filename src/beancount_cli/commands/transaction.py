@@ -14,6 +14,7 @@ from beancount_cli.models import (
     CostModel,
     CurrencyCode,
     PostingModel,
+    RegexPattern,
     TransactionModel,
 )
 from beancount_cli.services import TransactionService
@@ -23,8 +24,8 @@ transaction = app.group("transaction", description="Manage transactions")
 
 @dataclass(frozen=True, slots=True)
 class ListArgs(LedgerArgs):
-    account: str | None = Flag(default=None, description="Filter by account regex")
-    payee: str | None = Flag(default=None, short="p", description="Filter by payee regex")
+    account: RegexPattern | None = Flag(default=None, description="Filter by account regex")
+    payee: RegexPattern | None = Flag(default=None, short="p", description="Filter by payee regex")
     tag: str | None = Flag(default=None, short="t", description="Filter by tag")
     where: str | None = Flag(default=None, short="w", description="BQL where clause")
 
