@@ -62,6 +62,28 @@ def test_global_flags_go_anywhere_command_flags_after(temp_beancount_file):
     assert env["error"]["context"]["flag"] == "--file"
 
 
+def test_missing_required_flag_names_it_as_typed():
+    # Issue #7: the error names --name as it is typed, not the field name
+    code, out, _ = run("account", "create")
+    assert code == 2
+    env = json.loads(out)
+    assert env["error"]["code"] == "ARG_ERROR"
+    assert env["error"]["message"] == "Missing required option --name/-n"
+    assert env["error"]["context"]["missing"] == ["name"]
+    assert env["meta"]["exit_code"] == 2
+
+    # The human rendering adds the flag's help row, a usage line, and a --help pointer
+    code, out, err = run("--format", "plain", "account", "create")
+    assert code == 2
+    assert out == ""
+    assert err == (
+        "bean: ARG_ERROR: Missing required option --name/-n\n"
+        "  --name, -n  Account name (e.g. Assets:Bank) (required)\n"
+        "usage: bean account create --name <name> [options]\n"
+        "Run 'bean account create --help' for all options.\n"
+    )
+
+
 def test_transaction_list(temp_beancount_file):
     env = call("transaction.list", file=str(temp_beancount_file))
     assert env.exit_code == 0

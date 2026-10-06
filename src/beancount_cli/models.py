@@ -5,7 +5,7 @@ import re
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Any
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_serializer
 
 
 def validate_account_name(v: Any) -> str:
@@ -106,10 +106,17 @@ class TransactionModel(BaseModel):
     flag: str = "*"
     payee: str | None = None
     narration: str
-    tags: set[str] = Field(default_factory=set)
-    links: set[str] = Field(default_factory=set)
+    # uniqueItems restates what set[str] says, since the serializer below returns a list
+    tags: set[str] = Field(default_factory=set, json_schema_extra={"uniqueItems": True})
+    links: set[str] = Field(default_factory=set, json_schema_extra={"uniqueItems": True})
     postings: list[PostingModel] = Field(json_schema_extra={"x-ordered": True})
     meta: dict[str, Any] = Field(default_factory=dict)
+
+    @field_serializer("tags", "links")
+    def _sorted(self, values: set[str]) -> list[str]:
+        """Sorted, since a set's order changes with PYTHONHASHSEED and an ordered command
+        keeps the order it is given"""
+        return sorted(values)
 
 
 class AccountModel(BaseModel):
