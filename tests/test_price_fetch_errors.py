@@ -52,7 +52,7 @@ def _run_fetch(
     env = {
         **os.environ,
         "PYTHONPATH": os.pathsep.join([str(TESTS_DIR), os.environ.get("PYTHONPATH", "")]),
-        "TMPDIR": str(tmp_path),  # isolate the bean-price cache
+        "XDG_CACHE_HOME": str(tmp_path),  # isolate the bean-price cache
     }
     env.pop("BEANCOUNT_FILE", None)
     return subprocess.run(
