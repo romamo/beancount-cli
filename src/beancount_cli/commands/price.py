@@ -1,11 +1,11 @@
 import datetime
 import logging
+import os
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from tempfile import gettempdir
 from typing import Any, Literal
 
 from beancount.core import convert, data
@@ -21,6 +21,17 @@ from beancount_cli.models import PriceAnomalyModel, PriceGapModel
 from beancount_cli.services import LedgerService, MapService, PriceService
 
 price = app.group("price", description="Manage prices")
+
+
+def price_cache_path(env: Mapping[str, str]) -> Path:
+    """The bean-price cache under the XDG cache home, not the temp dir.
+
+    It remembers past dates a source has no price for, so it must outlive the
+    temp dir, which macOS clears of files untouched for three days.
+    """
+    xdg = env.get("XDG_CACHE_HOME")
+    home = Path(xdg) if xdg and Path(xdg).is_absolute() else Path.home() / ".cache"
+    return home / "bean-price"
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,7 +214,7 @@ def price_fetch(args: FetchArgs, ctx: Ctx) -> PriceFetch:
     files_to_load = [ledger_path(f, ctx) for f in args.ledger_files or (args.file,)]
     ctx.progress(f"Fetching prices for {', '.join(str(f) for f in files_to_load)}")
 
-    bp_price.setup_cache(str(Path(gettempdir()) / "bean-price.cache"), clear_cache=False)
+    bp_price.setup_cache(str(price_cache_path(os.environ)), clear_cache=False)
 
     # Merge every ledger, in beancount's canonical order
     services = [LedgerService(f) for f in files_to_load]

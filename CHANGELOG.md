@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+- `price fetch` keeps the bean-price cache in `$XDG_CACHE_HOME/bean-price` (default `~/.cache/bean-price`) instead of the temp dir, which macOS clears of files untouched for three days, so remembered no-price dates survive between weekly runs
+
 ## [0.6.0] - 2026-10-06
 
 ### Changed
